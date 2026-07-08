@@ -1,0 +1,6 @@
+{
+  "name": "منصة أساس لحديد التسليح",
+  "description": "منصة ويب احترافية لبيع وطلب حديد التسليح وتتبع الطلبات وتوجيهها للموردين",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
