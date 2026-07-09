@@ -10,7 +10,7 @@ import AdminPage from "./components/AdminPage";
 import SupplierPage from "./components/SupplierPage";
 import SupportPage from "./components/SupportPage";
 import CustomerAuthModal from "./components/CustomerAuthModal";
-import { Product, SteelType, Order, Supplier, CartItem, OrderStatus, Customer } from "./types";
+import { Product, SteelType, Order, Supplier, CartItem, OrderStatus, Customer, AdminNotification } from "./types";
 import {
   fetchAppState,
   addSteelType,
@@ -23,6 +23,8 @@ import {
   updateOrderStatus,
   addSupplier,
   updateCustomerStatus,
+  updateSupplierStatus,
+  readAllNotifications,
   verifySession,
   logoutSession
 } from "./services/api";
@@ -35,6 +37,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -79,6 +82,7 @@ export default function App() {
       setOrders(state.orders);
       setSuppliers(state.suppliers);
       setCustomers(state.customers || []);
+      setNotifications(state.notifications || []);
 
       // Check if logged-in customer is suspended
       if (currentCustomer) {
@@ -343,6 +347,27 @@ export default function App() {
     return updatedCustomer;
   };
 
+  const handleUpdateSupplierStatusAction = async (id: string, status: "pending" | "active" | "suspended") => {
+    const updated = await updateSupplierStatus(id, status);
+    setSuppliers((prev) => prev.map((s) => (s.id === id ? updated : s)));
+    
+    // If supplier was suspended and was logged in, log them out
+    if (currentSupplier && currentSupplier.id === id && status !== "active") {
+      setCurrentSupplier(null);
+      localStorage.removeItem("asas_session_token");
+      setView("client");
+      window.history.pushState({}, "", "/");
+      alert("تم تعديل حالة حسابك من قبل الإدارة، يرجى مراجعة المدير العام.");
+    }
+    return updated;
+  };
+
+  const handleReadAllNotificationsAction = async () => {
+    await readAllNotifications();
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    return true;
+  };
+
   if (authChecking) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white p-4">
@@ -406,6 +431,7 @@ export default function App() {
                 orders={orders}
                 suppliers={suppliers}
                 customers={customers}
+                notifications={notifications}
                 onAddSteelType={handleAddSteelTypeAction}
                 onEditSteelType={handleEditSteelTypeAction}
                 onDeleteSteelType={handleDeleteSteelTypeAction}
@@ -415,6 +441,8 @@ export default function App() {
                 onUpdateOrderStatus={handleUpdateOrderStatusAction}
                 onAddSupplier={handleAddSupplierAction}
                 onUpdateCustomerStatus={handleUpdateCustomerStatusAction}
+                onUpdateSupplierStatus={handleUpdateSupplierStatusAction}
+                onReadAllNotifications={handleReadAllNotificationsAction}
                 isLoggedIn={isAdminLoggedIn}
                 onLoginSuccess={handleAdminLoginSuccess}
                 onLogout={handleLogoutAction}

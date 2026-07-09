@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Product, SteelType, Order, Supplier, OrderStatus, Customer } from "../types";
+import { Product, SteelType, Order, Supplier, OrderStatus, Customer, AdminNotification } from "../types";
 
 export interface DatabaseState {
   products: Product[];
@@ -11,6 +11,7 @@ export interface DatabaseState {
   orders: Order[];
   suppliers: Supplier[];
   customers: Customer[];
+  notifications?: AdminNotification[];
 }
 
 const LOCAL_STORAGE_KEY = "asas_platform_backup_db";
@@ -485,4 +486,51 @@ export async function updateCustomerStatus(
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(db));
     return db.customers[index];
   }
+}
+
+export async function registerSupplier(supplierData: {
+  name: string;
+  managerName: string;
+  phone: string;
+  governorate: string;
+  address?: string;
+}): Promise<{ success: boolean; supplier: Supplier }> {
+  const response = await fetch(`${API_BASE}/auth/supplier-register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(supplierData)
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || "خطأ في تسجيل حساب المورد");
+  }
+  return await response.json();
+}
+
+export async function updateSupplierStatus(
+  id: string,
+  status: "pending" | "active" | "suspended"
+): Promise<Supplier> {
+  const response = await fetch(`${API_BASE}/suppliers/${id}/status`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status })
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || "خطأ في تحديث حالة المورد");
+  }
+  const res = await response.json();
+  return res.supplier;
+}
+
+export async function readAllNotifications(): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/notifications/read-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  if (!response.ok) {
+    throw new Error("خطأ في قراءة الإشعارات");
+  }
+  return await response.json();
 }

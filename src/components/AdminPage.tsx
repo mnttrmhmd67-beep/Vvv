@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from "react";
-import { Product, SteelType, Order, Supplier, OrderStatus, Customer } from "../types";
-import { Shield, Lock, Phone, Database, TrendingUp, Plus, Edit2, Trash2, Check, X, ArrowLeft, ArrowUpRight, ClipboardList, Tag, Image, Compass, HelpCircle, Truck, Users, Ban, UserCheck, Search, Eye, Calendar, LogOut } from "lucide-react";
+import { Product, SteelType, Order, Supplier, OrderStatus, Customer, AdminNotification } from "../types";
+import { Shield, Lock, Phone, Database, TrendingUp, Plus, Edit2, Trash2, Check, X, ArrowLeft, ArrowUpRight, ClipboardList, Tag, Image, Compass, HelpCircle, Truck, Users, Ban, UserCheck, Search, Eye, Calendar, LogOut, CheckSquare, MessageSquare } from "lucide-react";
 import { adminLogin } from "../services/api";
 
 interface AdminPageProps {
@@ -14,6 +14,7 @@ interface AdminPageProps {
   orders: Order[];
   suppliers: Supplier[];
   customers: Customer[];
+  notifications?: AdminNotification[];
   onAddSteelType: (name: string) => Promise<any>;
   onEditSteelType: (id: string, name: string) => Promise<any>;
   onDeleteSteelType: (id: string) => Promise<any>;
@@ -23,6 +24,8 @@ interface AdminPageProps {
   onUpdateOrderStatus: (id: string, status: OrderStatus, supplierId?: string | null, note?: string) => Promise<any>;
   onAddSupplier: (sup: { name: string; phone: string; pin: string }) => Promise<any>;
   onUpdateCustomerStatus: (id: string, status: "active" | "suspended") => Promise<any>;
+  onUpdateSupplierStatus?: (id: string, status: "pending" | "active" | "suspended") => Promise<any>;
+  onReadAllNotifications?: () => Promise<any>;
   isLoggedIn?: boolean;
   onLoginSuccess?: (token: string, user: any) => void;
   onLogout?: () => void;
@@ -34,6 +37,7 @@ export default function AdminPage({
   orders,
   suppliers,
   customers = [],
+  notifications = [],
   onAddSteelType,
   onEditSteelType,
   onDeleteSteelType,
@@ -43,6 +47,8 @@ export default function AdminPage({
   onUpdateOrderStatus,
   onAddSupplier,
   onUpdateCustomerStatus,
+  onUpdateSupplierStatus,
+  onReadAllNotifications,
   isLoggedIn = false,
   onLoginSuccess,
   onLogout
@@ -471,6 +477,56 @@ export default function AdminPage({
       {/* VIEW 1: Statistics Dashboard */}
       {activeTab === "stats" && (
         <div className="space-y-8">
+          {/* Admin Notifications / Alerts Panel */}
+          {notifications && notifications.length > 0 && (
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 relative overflow-hidden shadow-xl text-right">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 pb-3 border-b border-slate-800 gap-2">
+                {onReadAllNotifications && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await onReadAllNotifications();
+                      } catch (err: any) {
+                        alert(err.message);
+                      }
+                    }}
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-bold rounded-xl transition-all cursor-pointer"
+                  >
+                    تحديد الكل كمقروء
+                  </button>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-orange-500 animate-pulse"></span>
+                  <h3 className="text-sm font-black text-white font-sans">تنبيهات المنصة والإشعارات الأخيرة</h3>
+                </div>
+              </div>
+
+              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                {notifications.map((notif) => (
+                  <div
+                    key={notif.id}
+                    className={`p-4 rounded-2xl border transition-all text-xs flex justify-between items-start gap-4 ${
+                      notif.read
+                        ? "bg-slate-950/40 border-slate-900/60 text-slate-400"
+                        : "bg-slate-950 border-orange-500/20 text-slate-200"
+                    }`}
+                  >
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {notif.createdAt ? new Date(notif.createdAt).toLocaleTimeString("ar-IQ") : "الآن"}
+                    </span>
+                    <div className="flex-1 text-right">
+                      <div className="flex items-center gap-2 mb-1.5 justify-end">
+                        <strong className="text-white font-extrabold">{notif.title}</strong>
+                        {!notif.read && <span className="h-2 w-2 rounded-full bg-orange-500"></span>}
+                      </div>
+                      <p className="whitespace-pre-line text-slate-300 text-[11px] leading-relaxed font-semibold">{notif.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Dashboard Stats Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 text-right shadow-xs">
@@ -978,30 +1034,144 @@ export default function AdminPage({
           </div>
 
           {/* List existing suppliers */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 text-right col-span-2 shadow-xs">
-            <h2 className="text-base font-black text-slate-900 font-sans mb-6">الموردون المعتمدون بالمنصة حالياً</h2>
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 text-right col-span-2 shadow-xs space-y-8">
+            {/* 1. Pending Approvals */}
+            {suppliers.filter((s) => s.status === "pending").length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-black text-orange-600 flex items-center gap-1 justify-end">
+                  <span className="h-2 w-2 rounded-full bg-orange-500 animate-ping"></span>
+                  <span>طلبات تسجيل الموردين بانتظار الموافقة ({suppliers.filter((s) => s.status === "pending").length})</span>
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {suppliers.filter((s) => s.status === "pending").map((sup) => {
+                    return (
+                      <div key={sup.id} className="border-2 border-orange-200 rounded-2xl p-4.5 bg-orange-50/20 text-right space-y-3">
+                        <div className="flex justify-between items-start">
+                          <span className="bg-orange-100 text-orange-800 text-[9px] font-black px-2 py-0.5 rounded-md">بانتظار الموافقة</span>
+                          <h3 className="text-sm font-extrabold text-slate-900">{sup.name}</h3>
+                        </div>
+                        
+                        <div className="space-y-1.5 text-xs text-slate-700">
+                          <div><span className="font-bold text-slate-400">اسم المسؤول:</span> <span className="font-bold text-slate-800">{sup.managerName || "غير محدد"}</span></div>
+                          <div><span className="font-bold text-slate-400">رقم الهاتف:</span> <strong className="font-bold select-all text-slate-800">{sup.phone}</strong></div>
+                          <div><span className="font-bold text-slate-400">المحافظة:</span> <span className="font-bold text-slate-800">{sup.governorate || "غير محدد"}</span></div>
+                          {sup.address && <div><span className="font-bold text-slate-400">العنوان:</span> <span className="font-semibold text-slate-600 text-[11px]">{sup.address}</span></div>}
+                        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {suppliers.map((sup) => {
-                const assignedCount = orders.filter((o) => o.supplierId === sup.id).length;
-                const activeCount = orders.filter((o) => o.supplierId === sup.id && o.status !== "delivered" && o.status !== "rejected").length;
+                        {onUpdateSupplierStatus && (
+                          <div className="pt-3 border-t border-orange-100 flex gap-2">
+                            <button
+                              onClick={async () => {
+                                if (confirm(`هل أنت متأكد من قبول حساب المورد (${sup.name}) وتنشيطه بالمنصة؟`)) {
+                                  try {
+                                    await onUpdateSupplierStatus(sup.id, "active");
+                                    alert("تم قبول وتنشيط حساب المورد بنجاح!");
+                                  } catch (err: any) {
+                                    alert(err.message);
+                                  }
+                                }
+                              }}
+                              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded-lg text-[10px] transition-all cursor-pointer text-center"
+                            >
+                              قبول وتفعيل الحساب
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (confirm(`هل أنت متأكد من رفض طلب المورد (${sup.name})؟`)) {
+                                  try {
+                                    await onUpdateSupplierStatus(sup.id, "suspended");
+                                    alert("تم رفض طلب المورد بنجاح.");
+                                  } catch (err: any) {
+                                    alert(err.message);
+                                  }
+                                }
+                              }}
+                              className="bg-red-50 hover:bg-red-100 text-red-600 font-bold px-3 py-1.5 rounded-lg text-[10px] transition-all cursor-pointer text-center"
+                            >
+                              رفض الطلب
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-                return (
-                  <div key={sup.id} className="border border-slate-200 rounded-2xl p-4.5 bg-slate-50/50 hover:border-slate-300 transition-all text-right">
-                    <h3 className="text-sm font-extrabold text-slate-900">{sup.name}</h3>
-                    
-                    <div className="space-y-1.5 mt-3 text-xs">
-                      <div className="text-slate-600"><span className="font-bold text-slate-400">هاتف الدخول:</span> <strong className="font-bold select-all text-slate-800">{sup.phone}</strong></div>
-                      <div className="text-slate-600"><span className="font-bold text-slate-400">الرمز السري (PIN):</span> <span className="font-semibold text-slate-800">{sup.pin}</span></div>
+            {/* 2. Approved Suppliers */}
+            <div className="space-y-4">
+              <h2 className="text-base font-black text-slate-900 font-sans">الموردون واللوجستيون النشطون والموقوفون</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {suppliers.filter((s) => s.status !== "pending").map((sup) => {
+                  const assignedCount = orders.filter((o) => o.supplierId === sup.id).length;
+                  const activeCount = orders.filter((o) => o.supplierId === sup.id && o.status !== "delivered" && o.status !== "rejected").length;
+                  const isSuspended = sup.status === "suspended";
+
+                  return (
+                    <div key={sup.id} className={`border rounded-2xl p-4.5 bg-slate-50/50 hover:border-slate-300 transition-all text-right space-y-3 ${isSuspended ? "border-red-200 bg-red-50/5" : "border-slate-200"}`}>
+                      <div className="flex justify-between items-start">
+                        {isSuspended ? (
+                          <span className="bg-red-100 text-red-800 text-[9px] font-black px-2 py-0.5 rounded-md">موقف مؤقتاً</span>
+                        ) : (
+                          <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-2 py-0.5 rounded-md">نشط ومفعل</span>
+                        )}
+                        <h3 className="text-sm font-extrabold text-slate-900">{sup.name}</h3>
+                      </div>
+                      
+                      <div className="space-y-1 mt-1 text-xs text-slate-700">
+                        {sup.managerName && <div><span className="font-bold text-slate-400">المسؤول:</span> <span className="font-bold text-slate-800">{sup.managerName}</span></div>}
+                        <div><span className="font-bold text-slate-400">هاتف الدخول:</span> <strong className="font-bold select-all text-slate-800">{sup.phone}</strong></div>
+                        {sup.governorate && <div><span className="font-bold text-slate-400">المحافظة:</span> <span className="font-bold text-slate-800">{sup.governorate}</span></div>}
+                        {sup.pin && <div><span className="font-bold text-slate-400">الرمز السري (PIN):</span> <span className="font-semibold text-slate-800">{sup.pin}</span></div>}
+                      </div>
+
+                      <div className="pt-2.5 border-t border-slate-150 flex justify-between items-center text-[10px] font-bold text-slate-500">
+                        <span>الطلبات الموجهة: <strong className="text-slate-800 text-xs font-black">{assignedCount}</strong></span>
+                        <span className="text-orange-600">قيد التجهيز: <strong className="text-orange-700 text-xs font-black">{activeCount}</strong></span>
+                      </div>
+
+                      {onUpdateSupplierStatus && (
+                        <div className="pt-2.5 flex justify-end">
+                          {isSuspended ? (
+                            <button
+                              onClick={async () => {
+                                if (confirm(`هل أنت متأكد من إعادة تفعيل حساب المورد (${sup.name})؟`)) {
+                                  try {
+                                    await onUpdateSupplierStatus(sup.id, "active");
+                                    alert("تمت إعادة تفعيل حساب المورد بنجاح.");
+                                  } catch (err: any) {
+                                    alert(err.message);
+                                  }
+                                }
+                              }}
+                              className="w-full bg-slate-900 hover:bg-emerald-600 hover:text-white text-white font-bold py-1.5 rounded-lg text-[10px] transition-all cursor-pointer text-center"
+                            >
+                              إعادة تفعيل الحساب
+                            </button>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                if (confirm(`هل أنت متأكد من إيقاف حساب المورد (${sup.name}) مؤقتاً؟ لن يستطيع تسجيل الدخول أو استلام الطلبات.`)) {
+                                  try {
+                                    await onUpdateSupplierStatus(sup.id, "suspended");
+                                    alert("تم إيقاف حساب المورد بنجاح.");
+                                  } catch (err: any) {
+                                    alert(err.message);
+                                  }
+                                }
+                              }}
+                              className="w-full bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-700 font-bold py-1.5 rounded-lg text-[10px] transition-all cursor-pointer text-center"
+                            >
+                              إيقاف حساب المورد مؤقتاً
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-
-                    <div className="mt-4 pt-3 border-t border-slate-150 flex justify-between items-center text-[10px] font-bold text-slate-500">
-                      <span>الطلبات الموجهة: <strong className="text-slate-800 text-xs font-black">{assignedCount}</strong></span>
-                      <span className="text-orange-600">قيد التجهيز الآن: <strong className="text-orange-700 text-xs font-black">{activeCount}</strong></span>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

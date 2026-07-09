@@ -22,7 +22,21 @@ export interface Supplier {
   id: string;
   name: string;
   phone: string;
-  pin: string;
+  pin?: string;
+  managerName?: string;
+  governorate?: string;
+  address?: string;
+  status?: "pending" | "active" | "suspended";
+  createdAt?: string;
+}
+
+export interface AdminNotification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
 }
 
 export interface OrderItem {

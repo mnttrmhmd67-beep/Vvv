@@ -138,10 +138,11 @@ function initDb() {
   const defaultDb = {
     steelTypes: initialSteelTypes,
     products: initialProducts,
-    suppliers: initialSuppliers,
+    suppliers: initialSuppliers.map(s => ({ ...s, status: "active" })),
     orders: initialOrders,
     customers: [],
-    sessions: []
+    sessions: [],
+    notifications: []
   };
 
   if (!fs.existsSync(DB_FILE)) {
@@ -164,6 +165,18 @@ function initDb() {
     if (!data.sessions) {
       data.sessions = [];
       changed = true;
+    }
+    if (!data.notifications) {
+      data.notifications = [];
+      changed = true;
+    }
+    if (data.suppliers) {
+      data.suppliers.forEach((s: any) => {
+        if (!s.status) {
+          s.status = "active";
+          changed = true;
+        }
+      });
     }
     if (changed) {
       fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
@@ -464,9 +477,12 @@ async function startServer() {
       }
 
       const db = getDb();
-      const existing = db.customers.find((c: any) => c.phone === phone);
-      if (existing) {
-        return res.status(400).json({ error: "رقم الهاتف هذا مسجل بالفعل بـ حساب آخر" });
+      
+      // Ensure phone is unique across all customers AND suppliers
+      const existingCust = db.customers.find((c: any) => c.phone.trim() === phone.trim());
+      const existingSup = db.suppliers.find((s: any) => s.phone.trim() === phone.trim());
+      if (existingCust || existingSup) {
+        return res.status(400).json({ error: "رقم الهاتف هذا مسجل بالفعل في منصة أساس بـ حساب آخر" });
       }
 
       const newCustomer = {
@@ -480,11 +496,88 @@ async function startServer() {
       };
 
       db.customers.push(newCustomer);
+      
+      // Create admin notification
+      db.notifications = db.notifications || [];
+      const messageText = `🆕 تم إنشاء حساب عميل جديد\nالاسم: ${name}\nالهاتف: ${phone}`;
+      db.notifications.push({
+        id: "notif-" + Date.now() + "-cust",
+        type: "customer_registered",
+        title: "🆕 حساب عميل جديد",
+        message: messageText,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+      
       saveDb(db);
+
+      // Trigger background WhatsApp if configured
+      try {
+        sendWhatsAppNotification(messageText);
+      } catch (err) {
+        console.error("WhatsApp error:", err);
+      }
 
       const token = createSession("customer", newCustomer.phone, newCustomer.id, newCustomer);
 
       res.status(201).json({ success: true, token, customer: newCustomer });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Register Supplier (Self-Registration)
+  app.post("/api/auth/supplier-register", (req, res) => {
+    try {
+      const { name, managerName, phone, governorate, address } = req.body;
+      if (!name || !managerName || !phone || !governorate) {
+        return res.status(400).json({ error: "جميع الحقول الإلزامية مطلوبة (اسم الشركة، اسم المسؤول، رقم الهاتف، المحافظة)" });
+      }
+
+      const db = getDb();
+
+      // Ensure phone is unique across all customers AND suppliers
+      const existingCust = db.customers.find((c: any) => c.phone.trim() === phone.trim());
+      const existingSup = db.suppliers.find((s: any) => s.phone.trim() === phone.trim());
+      if (existingCust || existingSup) {
+        return res.status(400).json({ error: "رقم الهاتف هذا مسجل بالفعل في منصة أساس بـ حساب آخر" });
+      }
+
+      const newSupplier = {
+        id: "sup-" + Date.now(),
+        name,
+        managerName,
+        phone,
+        governorate,
+        address: address || "",
+        createdAt: new Date().toISOString(),
+        status: "pending" as const // Always defaults to pending
+      };
+
+      db.suppliers.push(newSupplier);
+
+      // Create admin notification
+      db.notifications = db.notifications || [];
+      const messageText = `🆕 تم تسجيل مورد جديد (بانتظار الموافقة)\nالشركة: ${name}\nالمسؤول: ${managerName}\nالهاتف: ${phone}\nالمحافظة: ${governorate}`;
+      db.notifications.push({
+        id: "notif-" + Date.now() + "-sup",
+        type: "supplier_registered",
+        title: "🆕 طلب تسجيل مورد جديد",
+        message: messageText,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+
+      saveDb(db);
+
+      // Trigger background WhatsApp if configured
+      try {
+        sendWhatsAppNotification(messageText);
+      } catch (err) {
+        console.error("WhatsApp error:", err);
+      }
+
+      res.status(201).json({ success: true, supplier: newSupplier });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -522,6 +615,15 @@ async function startServer() {
       );
 
       if (supplier) {
+        // Enforce status checks
+        const status = supplier.status || "active";
+        if (status === "pending") {
+          return res.status(403).json({ error: "عذراً، حساب المورد الخاص بك قيد المراجعة وبانتظار موافقة المدير العام لتفعيل تسجيل الدخول واستقبال الطلبات." });
+        }
+        if (status === "suspended") {
+          return res.status(403).json({ error: "عذراً، تم إيقاف حساب المورد هذا مؤقتاً. يرجى التواصل مع الإدارة." });
+        }
+
         const token = createSession("supplier", supplier.phone, supplier.id, supplier);
         res.json({ success: true, token, user: supplier });
       } else {
@@ -567,6 +669,25 @@ async function startServer() {
         if (customer) {
           // Update user details in session in case of name change etc.
           session.user = customer;
+          saveDb(db);
+        }
+      }
+
+      // Check if supplier is active
+      if (session.role === "supplier") {
+        const supplier = db.suppliers.find((s: any) => s.id === session.userId);
+        if (supplier) {
+          const status = supplier.status || "active";
+          if (status !== "active") {
+            db.sessions = db.sessions.filter((s: any) => s.id !== token);
+            saveDb(db);
+            return res.status(403).json({
+              error: status === "pending"
+                ? "عذراً، حساب المورد الخاص بك بانتظار موافقة الإدارة."
+                : "تم إيقاف حساب المورد هذا مؤقتاً، يرجى التواصل مع الإدارة."
+            });
+          }
+          session.user = supplier;
           saveDb(db);
         }
       }
@@ -642,6 +763,50 @@ async function startServer() {
       db.customers[index].status = status;
       saveDb(db);
       res.json({ success: true, customer: db.customers[index] });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Update Supplier Account Status (pending/active/suspended)
+  app.put("/api/suppliers/:id/status", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      if (!status || (status !== "active" && status !== "suspended" && status !== "pending")) {
+        return res.status(400).json({ error: "الحالة المطلوبة غير صالحة" });
+      }
+
+      const db = getDb();
+      const index = db.suppliers.findIndex((s: any) => s.id === id);
+
+      if (index === -1) {
+        return res.status(404).json({ error: "المورد غير موجود" });
+      }
+
+      db.suppliers[index].status = status;
+      
+      // If suspended, also clean their active session
+      if (status !== "active") {
+        db.sessions = db.sessions || [];
+        db.sessions = db.sessions.filter((s: any) => !(s.role === "supplier" && s.userId === id));
+      }
+
+      saveDb(db);
+      res.json({ success: true, supplier: db.suppliers[index] });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Read all admin notifications
+  app.post("/api/notifications/read-all", (req, res) => {
+    try {
+      const db = getDb();
+      db.notifications = db.notifications || [];
+      db.notifications.forEach((n: any) => n.read = true);
+      saveDb(db);
+      res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

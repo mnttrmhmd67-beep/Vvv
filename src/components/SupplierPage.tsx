@@ -5,8 +5,29 @@
 
 import React, { useState } from "react";
 import { Product, Order, Supplier, OrderStatus } from "../types";
-import { Truck, Phone, Lock, Calendar, ClipboardCheck, Play, Send, CheckCircle2, Navigation, MessageSquare, AlertCircle, Ban } from "lucide-react";
-import { supplierLogin } from "../services/api";
+import { Truck, Phone, Lock, Calendar, ClipboardCheck, Play, Send, CheckCircle2, Navigation, MessageSquare, AlertCircle, Ban, User, MapPin } from "lucide-react";
+import { supplierLogin, registerSupplier } from "../services/api";
+
+const IRAQI_GOVERNORATES = [
+  "بغداد",
+  "البصرة",
+  "نينوى",
+  "أربيل",
+  "السليمانية",
+  "دهوك",
+  "كركوك",
+  "بابل",
+  "كربلاء",
+  "النجف",
+  "الأنبار",
+  "ذي قار",
+  "ميسان",
+  "المثنى",
+  "القادسية",
+  "واسط",
+  "صلاح الدين",
+  "ديالى"
+];
 
 interface SupplierPageProps {
   orders: Order[];
@@ -25,9 +46,19 @@ export default function SupplierPage({
   onLoginSuccess,
   onLogout
 }: SupplierPageProps) {
-  // Login State
+  // Authentication & View States
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [phone, setPhone] = useState("");
   const [authError, setAuthError] = useState("");
+
+  // Registration States
+  const [regName, setRegName] = useState("");
+  const [regManagerName, setRegManagerName] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regGovernorate, setRegGovernorate] = useState("بغداد");
+  const [regAddress, setRegAddress] = useState("");
+  const [regLoading, setRegLoading] = useState(false);
+  const [regSuccess, setRegSuccess] = useState(false);
 
   const pathParts = window.location.pathname.split("/");
   const requestedSupplierId = pathParts[2] || null;
@@ -47,6 +78,7 @@ export default function SupplierPage({
 
   const handleSupplierLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError("");
     try {
       const res = await supplierLogin(phone);
       if (res.success && res.token && res.user) {
@@ -55,10 +87,47 @@ export default function SupplierPage({
         }
         setAuthError("");
       } else {
-        setAuthError("رقم الهاتف أو الرمز السري للمورد غير صحيح.");
+        setAuthError("رقم الهاتف غير مسجل أو غير صحيح.");
       }
     } catch (err: any) {
       setAuthError(err.message || "حدث خطأ أثناء محاولة تسجيل الدخول.");
+    }
+  };
+
+  const handleSupplierRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setRegLoading(true);
+    try {
+      const res = await registerSupplier({
+        name: regName,
+        managerName: regManagerName,
+        phone: regPhone,
+        governorate: regGovernorate,
+        address: regAddress
+      });
+      if (res.success) {
+        setRegSuccess(true);
+        
+        // Open WhatsApp in a new window immediately
+        try {
+          const text = `🆕 تم تسجيل مورد جديد (بانتظار الموافقة)\nالشركة: ${regName}\nالمسؤول: ${regManagerName}\nالهاتف: ${regPhone}\nالمحافظة: ${regGovernorate}`;
+          const encodedText = encodeURIComponent(text);
+          window.open(`https://wa.me/9647732670436?text=${encodedText}`, "_blank");
+        } catch (waErr) {
+          console.error("Failed to auto-open WhatsApp:", waErr);
+        }
+
+        // Reset form
+        setRegName("");
+        setRegManagerName("");
+        setRegPhone("");
+        setRegAddress("");
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "حدث خطأ أثناء تقديم طلب التسجيل");
+    } finally {
+      setRegLoading(false);
     }
   };
 
@@ -163,10 +232,10 @@ export default function SupplierPage({
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center px-4 py-12">
         <div className="absolute inset-0 opacity-5 bg-[radial-gradient(#f97316_1px,transparent_1.5px)] [background-size:20px_20px] pointer-events-none"></div>
-        <div className="w-full max-w-md bg-slate-900 border-2 border-slate-800 rounded-3xl shadow-2xl p-8 relative overflow-hidden">
+        <div className="w-full max-w-lg bg-slate-900 border-2 border-slate-800 rounded-3xl shadow-2xl p-8 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 via-amber-400 to-orange-600"></div>
 
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-orange-500/10 text-orange-500 mb-4 border border-orange-500/20">
               <Truck className="h-7 w-7" />
             </div>
@@ -174,50 +243,209 @@ export default function SupplierPage({
             <p className="text-xs text-slate-400 mt-1.5 font-medium">منصة أساس لتجهيز حديد التسليح</p>
           </div>
 
-          {/* List of active suppliers with login details */}
-          <div className="bg-slate-950 p-4.5 rounded-2xl border border-slate-800 text-right mb-6 text-xs text-slate-300 space-y-2.5 leading-relaxed font-semibold">
-            <span className="text-orange-500 font-black block">قائمة حسابات الموردين المتاحة للتجربة الحية:</span>
-            <div className="divide-y divide-slate-800 space-y-2">
-              {suppliers.map((sup) => (
-                <div key={sup.id} className="pt-2 flex justify-between items-center text-[11px]">
-                  <span className="text-white font-bold">{sup.name}</span>
-                  <div className="flex gap-4">
-                    <span>الهاتف: <strong className="text-white select-all">{sup.phone}</strong></span>
-                  </div>
-                </div>
-              ))}
+          {/* Tab Selector */}
+          {!regSuccess && (
+            <div className="grid grid-cols-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 mb-6">
+              <button
+                onClick={() => { setActiveTab("login"); setAuthError(""); }}
+                className={`py-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeTab === "login"
+                    ? "bg-orange-500 text-slate-950 shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                تسجيل الدخول
+              </button>
+              <button
+                onClick={() => { setActiveTab("register"); setAuthError(""); }}
+                className={`py-3 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeTab === "register"
+                    ? "bg-orange-500 text-slate-950 shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                إنشاء حساب مورد جديد
+              </button>
             </div>
-          </div>
+          )}
 
-          <form onSubmit={handleSupplierLogin} className="space-y-5 text-right">
-            <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1.5 font-sans">رقم هاتف المورد المسجل *</label>
-              <div className="relative">
-                <Phone className="absolute right-3.5 top-3.5 text-slate-500 h-4 w-4" />
-                <input
-                  type="text"
-                  required
-                  placeholder="مثال: 07701111111"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pr-10 pl-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-right"
-                />
+          {regSuccess ? (
+            <div className="text-center py-6 space-y-6">
+              <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-green-500/10 text-green-500 border border-green-500/20 mb-2">
+                <CheckCircle2 className="h-9 w-9 animate-bounce" />
+              </div>
+              <h3 className="text-lg font-black text-white">تم تقديم طلب التسجيل بنجاح!</h3>
+              <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
+                حساب المورد الخاص بك قيد الانتظار حالياً وبانتظار تفعيل وموافقة الإدارة العامة لمنصة أساس.
+              </p>
+
+              <div className="bg-slate-950 p-4.5 rounded-2xl border border-slate-800 text-right text-xs text-slate-300 space-y-2.5 leading-relaxed font-semibold">
+                <span className="text-orange-500 font-black block">لتسريع عملية التفعيل:</span>
+                <p className="text-[11px] text-slate-400">
+                  يرجى النقر على الزر أدناه لإرسال بيانات تسجيل حسابك تلقائياً إلى رقم المدير العام لتسريع الموافقة:
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    const text = `🆕 تم تسجيل مورد جديد (بانتظار الموافقة)\nيرجى تفعيل حسابي:\nالشركة: ${regName}\nالمسؤول: ${regManagerName}\nالهاتف: ${regPhone}`;
+                    const encodedText = encodeURIComponent(text);
+                    window.open(`https://wa.me/9647732670436?text=${encodedText}`, "_blank");
+                  }}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-3.5 rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-green-500/20"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  إرسال طلب التفعيل لواتساب المدير العام
+                </button>
+
+                <button
+                  onClick={() => {
+                    setRegSuccess(false);
+                    setActiveTab("login");
+                  }}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-3 rounded-xl text-xs transition-all"
+                >
+                  الذهاب لصفحة تسجيل الدخول
+                </button>
               </div>
             </div>
+          ) : activeTab === "login" ? (
+            <div className="space-y-6">
+              {/* List of active suppliers with login details */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-right text-xs text-slate-300 space-y-2.5 leading-relaxed font-semibold">
+                <span className="text-orange-500 font-black block">حسابات الموردين التجريبية النشطة:</span>
+                <div className="divide-y divide-slate-800/60 space-y-2 max-h-[140px] overflow-y-auto">
+                  {suppliers.filter(s => s.status === "active" || !s.status).map((sup) => (
+                    <div key={sup.id} className="pt-2 flex justify-between items-center text-[11px]">
+                      <span className="text-white font-bold">{sup.name}</span>
+                      <span>الهاتف: <strong className="text-white select-all">{sup.phone}</strong></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-            {authError && (
-              <p className="text-xs font-extrabold text-red-500 bg-red-500/10 p-3 rounded-lg border border-red-500/20">
-                {authError}
-              </p>
-            )}
+              <form onSubmit={handleSupplierLogin} className="space-y-5 text-right">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5 font-sans">رقم هاتف المورد المسجل *</label>
+                  <div className="relative">
+                    <Phone className="absolute right-3.5 top-3.5 text-slate-500 h-4 w-4" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="مثال: 077XXXXXXXX"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pr-10 pl-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-right"
+                    />
+                  </div>
+                </div>
 
-            <button
-              type="submit"
-              className="w-full bg-orange-500 hover:bg-orange-600 text-slate-950 font-black py-3.5 rounded-xl text-xs transition-all shadow-lg hover:shadow-orange-500/20"
-            >
-              تسجيل الدخول لبوابة التجهيز
-            </button>
-          </form>
+                {authError && (
+                  <p className="text-xs font-extrabold text-red-500 bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                    {authError}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-slate-950 font-black py-3.5 rounded-xl text-xs transition-all shadow-lg hover:shadow-orange-500/20 cursor-pointer"
+                >
+                  تسجيل الدخول لبوابة التجهيز
+                </button>
+              </form>
+            </div>
+          ) : (
+            <form onSubmit={handleSupplierRegister} className="space-y-4 text-right">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5 font-sans">اسم الشركة أو المكتب التجاري *</label>
+                <div className="relative">
+                  <Truck className="absolute right-3.5 top-3.5 text-slate-500 h-4 w-4" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثال: مذخر حديد الرافدين للتجهيز"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pr-10 pl-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-right"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5 font-sans">اسم المدير / الشخص المسؤول *</label>
+                <div className="relative">
+                  <User className="absolute right-3.5 top-3.5 text-slate-500 h-4 w-4" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="الاسم الكامل للشخص المسؤول عن الطلبات والتحميل"
+                    value={regManagerName}
+                    onChange={(e) => setRegManagerName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pr-10 pl-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-right"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5 font-sans">رقم الهاتف (فريد لتسجيل الدخول) *</label>
+                <div className="relative">
+                  <Phone className="absolute right-3.5 top-3.5 text-slate-500 h-4 w-4" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثال: 077XXXXXXXX"
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pr-10 pl-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-right"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5 font-sans">المحافظة *</label>
+                <div className="relative">
+                  <MapPin className="absolute right-3.5 top-3.5 text-slate-500 h-4 w-4 pointer-events-none" />
+                  <select
+                    value={regGovernorate}
+                    onChange={(e) => setRegGovernorate(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pr-10 pl-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-right appearance-none"
+                  >
+                    {IRAQI_GOVERNORATES.map((gov) => (
+                      <option key={gov} value={gov}>
+                        {gov}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5 font-sans">العنوان (اختياري)</label>
+                <textarea
+                  placeholder="مثال: المنطقة الصناعية، قرب المعارض"
+                  value={regAddress}
+                  onChange={(e) => setRegAddress(e.target.value)}
+                  rows={2}
+                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-right"
+                />
+              </div>
+
+              {authError && (
+                <p className="text-xs font-extrabold text-red-500 bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                  {authError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={regLoading}
+                className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-slate-950 font-black py-3.5 rounded-xl text-xs transition-all shadow-lg hover:shadow-orange-500/20 cursor-pointer"
+              >
+                {regLoading ? "جاري إرسال طلب التسجيل..." : "تقديم طلب تسجيل المورد للتدقيق الإداري"}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     );

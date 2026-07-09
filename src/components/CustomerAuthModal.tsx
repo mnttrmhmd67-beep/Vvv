@@ -149,6 +149,15 @@ export default function CustomerAuthModal({
       });
 
       if (res.success && res.customer) {
+        // Automatically open WhatsApp with details to manager
+        try {
+          const text = `🆕 تم إنشاء حساب عميل جديد\nالاسم: ${fullName}\nالهاتف: ${phone}`;
+          const encodedText = encodeURIComponent(text);
+          window.open(`https://wa.me/9647732670436?text=${encodedText}`, "_blank");
+        } catch (waErr) {
+          console.error("Failed to auto-open WhatsApp:", waErr);
+        }
+
         onLoginSuccess(res.token || "sess_fallback_customer", res.customer);
         resetState();
         onClose();
