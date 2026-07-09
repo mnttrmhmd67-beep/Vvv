@@ -202,19 +202,18 @@ function saveDb(data: any) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const app = express();
+const PORT = 3000;
 
-  // Middleware
-  app.use(express.json());
-  app.use((req, res, next) => {
-    console.log(`[Asas Server] ${req.method} ${req.url}`);
-    next();
-  });
+// Middleware
+app.use(express.json());
+app.use((req, res, next) => {
+  console.log(`[Asas Server] ${req.method} ${req.url}`);
+  next();
+});
 
-  // Init DB log
-  initDb();
+// Init DB log
+initDb();
 
   // ---------------------------------------------------------------------------
   // API Routes
@@ -1053,23 +1052,30 @@ async function startServer() {
   // Vite Integration & Static Assets
   // ---------------------------------------------------------------------------
 
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+  async function startServer() {
+    if (process.env.NODE_ENV !== "production") {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), "dist");
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
+
+    if (!process.env.VERCEL) {
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`[Asas Platform] Server running on http://localhost:${PORT}`);
+      });
+    }
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Asas Platform] Server running on http://localhost:${PORT}`);
-  });
-}
+  if (!process.env.VERCEL) {
+    startServer();
+  }
 
-startServer();
+  export default app;
