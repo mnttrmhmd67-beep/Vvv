@@ -479,8 +479,8 @@ async function startServer() {
       const db = getDb();
       
       // Ensure phone is unique across all customers AND suppliers
-      const existingCust = db.customers.find((c: any) => c.phone.trim() === phone.trim());
-      const existingSup = db.suppliers.find((s: any) => s.phone.trim() === phone.trim());
+      const existingCust = db.customers.find((c: any) => c && typeof c.phone === "string" && c.phone.trim() === phone.trim());
+      const existingSup = db.suppliers.find((s: any) => s && typeof s.phone === "string" && s.phone.trim() === phone.trim());
       if (existingCust || existingSup) {
         return res.status(400).json({ error: "رقم الهاتف هذا مسجل بالفعل في منصة أساس بـ حساب آخر" });
       }
@@ -537,8 +537,8 @@ async function startServer() {
       const db = getDb();
 
       // Ensure phone is unique across all customers AND suppliers
-      const existingCust = db.customers.find((c: any) => c.phone.trim() === phone.trim());
-      const existingSup = db.suppliers.find((s: any) => s.phone.trim() === phone.trim());
+      const existingCust = db.customers.find((c: any) => c && typeof c.phone === "string" && c.phone.trim() === phone.trim());
+      const existingSup = db.suppliers.find((s: any) => s && typeof s.phone === "string" && s.phone.trim() === phone.trim());
       if (existingCust || existingSup) {
         return res.status(400).json({ error: "رقم الهاتف هذا مسجل بالفعل في منصة أساس بـ حساب آخر" });
       }
@@ -611,7 +611,7 @@ async function startServer() {
       }
       const db = getDb();
       const supplier = db.suppliers.find(
-        (s: any) => s.phone.trim() === phone.trim()
+        (s: any) => s && typeof s.phone === "string" && s.phone.trim() === phone.trim()
       );
 
       if (supplier) {

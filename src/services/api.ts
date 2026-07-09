@@ -19,6 +19,21 @@ const LOCAL_STORAGE_KEY = "asas_platform_backup_db";
 // Base API URL
 const API_BASE = "/api";
 
+async function safeParseJson(response: Response): Promise<any> {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    if (text.includes("TypeError") || text.includes("trim")) {
+      return { error: "عذراً، حدث خطأ فني بالخادم أثناء التحقق من البيانات. يرجى التواصل مع إدارة منصة أساس." };
+    }
+    if (text.trim().startsWith("<")) {
+      return { error: `عذراً، حدث خطأ فني غير متوقع في الخادم (كود الاستجابة: ${response.status}). يرجى المحاولة لاحقاً.` };
+    }
+    return { error: text || `عذراً، حدث خطأ غير معروف أثناء الاتصال بالخادم (كود الاستجابة: ${response.status})` };
+  }
+}
+
 export async function fetchAppState(): Promise<DatabaseState> {
   try {
     const response = await fetch(`${API_BASE}/data`);
@@ -54,11 +69,11 @@ export async function adminLogin(phone: string, pin: string): Promise<{ success:
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone, pin })
     });
+    const data = await safeParseJson(response);
     if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || "رمز الدخول أو رقم الهاتف غير صحيح");
+      throw new Error(data.error || "رمز الدخول أو رقم الهاتف غير صحيح");
     }
-    return await response.json();
+    return data;
   } catch (error: any) {
     console.warn("Admin login API error, trying fallback:", error);
     if (phone.trim() === "07732670436" && pin.trim() === "200011") {
@@ -74,11 +89,11 @@ export async function supplierLogin(phone: string): Promise<{ success: boolean; 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone })
   });
+  const data = await safeParseJson(response);
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || "رقم الهاتف للمورد غير صحيح أو غير مسجل");
+    throw new Error(data.error || "رقم الهاتف للمورد غير صحيح أو غير مسجل");
   }
-  return await response.json();
+  return data;
 }
 
 export async function verifySession(token: string): Promise<{ success: boolean; role: "admin" | "supplier" | "customer"; user: any }> {
@@ -87,11 +102,11 @@ export async function verifySession(token: string): Promise<{ success: boolean; 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token })
   });
+  const data = await safeParseJson(response);
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || "الجلسة منتهية الصلاحية أو غير صالحة");
+    throw new Error(data.error || "الجلسة منتهية الصلاحية أو غير صالحة");
   }
-  return await response.json();
+  return data;
 }
 
 export async function logoutSession(token: string): Promise<{ success: boolean }> {
@@ -391,11 +406,11 @@ export async function checkPhone(phone: string): Promise<{ exists: boolean; cust
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone })
   });
+  const data = await safeParseJson(response);
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || "خطأ في التحقق من رقم الهاتف");
+    throw new Error(data.error || "خطأ في التحقق من رقم الهاتف");
   }
-  return await response.json();
+  return data;
 }
 
 export async function sendOtp(phone: string): Promise<{ success: boolean; otpSimulation: string }> {
@@ -404,11 +419,11 @@ export async function sendOtp(phone: string): Promise<{ success: boolean; otpSim
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone })
   });
+  const data = await safeParseJson(response);
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || "خطأ في إرسال رمز التحقق");
+    throw new Error(data.error || "خطأ في إرسال رمز التحقق");
   }
-  return await response.json();
+  return data;
 }
 
 export async function verifyOtp(phone: string, otp: string): Promise<{ success: boolean; token?: string; customer: Customer }> {
@@ -417,11 +432,11 @@ export async function verifyOtp(phone: string, otp: string): Promise<{ success: 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone, otp })
   });
+  const data = await safeParseJson(response);
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || "رمز التحقق غير صحيح");
+    throw new Error(data.error || "رمز التحقق غير صحيح");
   }
-  return await response.json();
+  return data;
 }
 
 export async function registerCustomer(customerData: {
@@ -435,11 +450,11 @@ export async function registerCustomer(customerData: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(customerData)
   });
+  const data = await safeParseJson(response);
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || "خطأ في إنشاء الحساب");
+    throw new Error(data.error || "خطأ في إنشاء الحساب");
   }
-  return await response.json();
+  return data;
 }
 
 export async function updateCustomerProfile(
@@ -500,11 +515,11 @@ export async function registerSupplier(supplierData: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(supplierData)
   });
+  const data = await safeParseJson(response);
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || "خطأ في تسجيل حساب المورد");
+    throw new Error(data.error || "خطأ في تسجيل حساب المورد");
   }
-  return await response.json();
+  return data;
 }
 
 export async function updateSupplierStatus(
