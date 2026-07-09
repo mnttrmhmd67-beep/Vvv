@@ -140,7 +140,8 @@ function initDb() {
     products: initialProducts,
     suppliers: initialSuppliers,
     orders: initialOrders,
-    customers: []
+    customers: [],
+    sessions: []
   };
 
   if (!fs.existsSync(DB_FILE)) {
@@ -158,6 +159,10 @@ function initDb() {
     }
     if (!data.orders) {
       data.orders = [];
+      changed = true;
+    }
+    if (!data.sessions) {
+      data.sessions = [];
       changed = true;
     }
     if (changed) {
@@ -223,6 +228,44 @@ async function startServer() {
       db.steelTypes.push(newType);
       saveDb(db);
       res.status(201).json(newType);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Edit steel type
+  app.put("/api/steel-types/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name } = req.body;
+      if (!name) {
+        return res.status(400).json({ error: "الاسم مطلوب" });
+      }
+      const db = getDb();
+      const index = db.steelTypes.findIndex((t: any) => t.id === id);
+      if (index === -1) {
+        return res.status(404).json({ error: "النوع غير موجود" });
+      }
+      db.steelTypes[index].name = name;
+      saveDb(db);
+      res.json(db.steelTypes[index]);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Delete steel type
+  app.delete("/api/steel-types/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const db = getDb();
+      const index = db.steelTypes.findIndex((t: any) => t.id === id);
+      if (index === -1) {
+        return res.status(404).json({ error: "النوع غير موجود" });
+      }
+      db.steelTypes.splice(index, 1);
+      saveDb(db);
+      res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -299,6 +342,34 @@ async function startServer() {
   });
 
   // ---------------------------------------------------------------------------
+  // Session Management Helper
+  // ---------------------------------------------------------------------------
+  function createSession(role: string, phone: string, userId: string | null, user: any) {
+    const db = getDb();
+    db.sessions = db.sessions || [];
+    
+    // Clean up expired sessions
+    const now = Date.now();
+    db.sessions = db.sessions.filter((s: any) => new Date(s.expiresAt).getTime() > now);
+
+    const token = "sess_" + Math.random().toString(36).substring(2, 15) + "_" + Date.now();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours validity
+
+    const newSession = {
+      id: token,
+      role,
+      phone,
+      userId,
+      user,
+      expiresAt
+    };
+
+    db.sessions.push(newSession);
+    saveDb(db);
+    return token;
+  }
+
+  // ---------------------------------------------------------------------------
   // Customer Authentication & Profile Routes
   // ---------------------------------------------------------------------------
 
@@ -370,7 +441,12 @@ async function startServer() {
       // Allow the actual generated code OR master codes "1234" / "123456" for convenience
       if (savedOtp === otp || otp === "1234" || otp === "123456") {
         tempOtps.delete(phone); // consume OTP
-        res.json({ success: true, customer });
+        
+        let token = "";
+        if (customer) {
+          token = createSession("customer", customer.phone, customer.id, customer);
+        }
+        res.json({ success: true, token, customer });
       } else {
         res.status(400).json({ error: "رمز التحقق المدخل غير صحيح" });
       }
@@ -400,13 +476,118 @@ async function startServer() {
         governorate,
         address: address || "",
         createdAt: new Date().toISOString(),
-        status: "active"
+        status: "active" as const
       };
 
       db.customers.push(newCustomer);
       saveDb(db);
 
-      res.status(201).json({ success: true, customer: newCustomer });
+      const token = createSession("customer", newCustomer.phone, newCustomer.id, newCustomer);
+
+      res.status(201).json({ success: true, token, customer: newCustomer });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Admin Login Verification
+  app.post("/api/auth/admin-login", (req, res) => {
+    try {
+      const { phone, pin } = req.body;
+      const ADMIN_PHONE = process.env.ADMIN_PHONE || "07732670436";
+      const ADMIN_PIN = process.env.ADMIN_PIN || "200011";
+
+      if (phone && pin && phone.trim() === ADMIN_PHONE && pin.trim() === ADMIN_PIN) {
+        const adminUser = { name: "المدير العام", phone: ADMIN_PHONE };
+        const token = createSession("admin", ADMIN_PHONE, "admin", adminUser);
+        res.json({ success: true, token, user: adminUser });
+      } else {
+        res.status(401).json({ error: "رقم الهاتف أو رمز الدخول السري غير صحيح" });
+      }
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Supplier Login Verification
+  app.post("/api/auth/supplier-login", (req, res) => {
+    try {
+      const { phone } = req.body;
+      if (!phone) {
+        return res.status(400).json({ error: "رقم الهاتف مطلوب" });
+      }
+      const db = getDb();
+      const supplier = db.suppliers.find(
+        (s: any) => s.phone.trim() === phone.trim()
+      );
+
+      if (supplier) {
+        const token = createSession("supplier", supplier.phone, supplier.id, supplier);
+        res.json({ success: true, token, user: supplier });
+      } else {
+        res.status(401).json({ error: "رقم الهاتف المدخل غير مسجل كمورد في المنصة" });
+      }
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Verify Session Token
+  app.post("/api/auth/verify-session", (req, res) => {
+    try {
+      const { token } = req.body;
+      if (!token) {
+        return res.status(400).json({ error: "Session token is required" });
+      }
+
+      const db = getDb();
+      db.sessions = db.sessions || [];
+      const session = db.sessions.find((s: any) => s.id === token);
+
+      if (!session) {
+        return res.status(401).json({ error: "Invalid session token" });
+      }
+
+      const now = Date.now();
+      if (new Date(session.expiresAt).getTime() < now) {
+        // Expired
+        db.sessions = db.sessions.filter((s: any) => s.id !== token);
+        saveDb(db);
+        return res.status(401).json({ error: "Session token expired" });
+      }
+
+      // Check if user is suspended (if customer)
+      if (session.role === "customer") {
+        const customer = db.customers.find((c: any) => c.id === session.userId);
+        if (customer && customer.status === "suspended") {
+          db.sessions = db.sessions.filter((s: any) => s.id !== token);
+          saveDb(db);
+          return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
+        }
+        if (customer) {
+          // Update user details in session in case of name change etc.
+          session.user = customer;
+          saveDb(db);
+        }
+      }
+
+      res.json({ success: true, role: session.role, user: session.user });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Logout
+  app.post("/api/auth/logout", (req, res) => {
+    try {
+      const { token } = req.body;
+      if (token) {
+        const db = getDb();
+        db.sessions = db.sessions || [];
+        db.sessions = db.sessions.filter((s: any) => s.id !== token);
+        saveDb(db);
+      }
+      res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

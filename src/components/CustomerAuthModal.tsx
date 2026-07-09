@@ -11,7 +11,7 @@ import { Customer } from "../types";
 interface CustomerAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (customer: Customer) => void;
+  onLoginSuccess: (token: string, customer: Customer) => void;
 }
 
 const IRAQI_GOVERNORATES = [
@@ -45,6 +45,9 @@ export default function CustomerAuthModal({
   const [otp, setOtp] = useState("");
   const [otpSimulation, setOtpSimulation] = useState("");
   
+  // Tab Mode
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+
   // Registration form
   const [fullName, setFullName] = useState("");
   const [governorate, setGovernorate] = useState("بغداد");
@@ -58,6 +61,7 @@ export default function CustomerAuthModal({
 
   const resetState = () => {
     setStep("phone");
+    setActiveTab("login");
     setPhone("");
     setOtp("");
     setOtpSimulation("");
@@ -86,9 +90,10 @@ export default function CustomerAuthModal({
         setStep("otp");
         setSuccessMsg("تم إرسال رمز التحقق بنجاح إلى رقمك عبر واتساب");
       } else {
-        // New user: go to registration step
+        // New user: suggest register
+        setActiveTab("register");
         setStep("register");
-        setSuccessMsg("رقم الهاتف هذا غير مسجل لدينا. يرجى إكمال التسجيل لإنشاء حسابك.");
+        setSuccessMsg("رقم الهاتف هذا غير مسجل لدينا. يرجى إكمال التسجيل أدناه لإنشاء حسابك.");
       }
     } catch (err: any) {
       setError(err.message || "حدث خطأ أثناء فحص رقم الهاتف");
@@ -106,7 +111,7 @@ export default function CustomerAuthModal({
     try {
       const res = await verifyOtp(phone, otp);
       if (res.success && res.customer) {
-        onLoginSuccess(res.customer);
+        onLoginSuccess(res.token || "sess_fallback_customer", res.customer);
         resetState();
         onClose();
       } else {
@@ -129,6 +134,13 @@ export default function CustomerAuthModal({
     setLoading(true);
 
     try {
+      // Check if phone number is already registered
+      const { exists } = await checkPhone(phone);
+      if (exists) {
+        setError("رقم الهاتف هذا مسجل بالفعل. يرجى الانتقال إلى تسجيل الدخول.");
+        return;
+      }
+
       const res = await registerCustomer({
         name: fullName,
         phone,
@@ -137,7 +149,7 @@ export default function CustomerAuthModal({
       });
 
       if (res.success && res.customer) {
-        onLoginSuccess(res.customer);
+        onLoginSuccess(res.token || "sess_fallback_customer", res.customer);
         resetState();
         onClose();
       } else {
@@ -183,6 +195,42 @@ export default function CustomerAuthModal({
           </button>
         </div>
 
+        {/* Tab Selection (only visible if we are not verifying OTP) */}
+        {step !== "otp" && (
+          <div className="flex border-b border-slate-100 bg-slate-50">
+            <button
+              onClick={() => {
+                setActiveTab("login");
+                setStep("phone");
+                setError("");
+                setSuccessMsg("");
+              }}
+              className={`flex-1 py-3 text-xs font-black transition-all ${
+                activeTab === "login"
+                  ? "bg-white border-b-2 border-orange-500 text-orange-600"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              تسجيل الدخول
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("register");
+                setStep("register");
+                setError("");
+                setSuccessMsg("");
+              }}
+              className={`flex-1 py-3 text-xs font-black transition-all ${
+                activeTab === "register"
+                  ? "bg-white border-b-2 border-orange-500 text-orange-600"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              إنشاء حساب جديد
+            </button>
+          </div>
+        )}
+
         {/* Content body */}
         <div className="p-6">
           {error && (
@@ -199,12 +247,12 @@ export default function CustomerAuthModal({
             </div>
           )}
 
-          {/* STEP 1: Enter Phone */}
-          {step === "phone" && (
+          {/* STEP 1: Enter Phone (Login Mode) */}
+          {activeTab === "login" && step === "phone" && (
             <form onSubmit={handlePhoneSubmit} className="space-y-4">
               <div className="text-center pb-2">
                 <p className="text-xs text-slate-500 font-bold leading-relaxed">
-                  أهلاً بك في منصة أساس لحديد التسليح. يرجى إدخال رقم هاتفك لتسجيل الدخول أو إنشاء حساب جديد لتتمكن من تقديم الطلبات.
+                  مرحباً بك مجدداً. يرجى إدخال رقم هاتفك لتسجيل الدخول السريع وتأكيد هويتك عبر رمز التحقق.
                 </p>
               </div>
 
@@ -235,6 +283,19 @@ export default function CustomerAuthModal({
                 <span>{loading ? "جاري التحقق..." : "متابعة"}</span>
                 <ArrowRight className="h-4 w-4 transform rotate-180" />
               </button>
+
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("register");
+                    setStep("register");
+                  }}
+                  className="text-xs text-orange-600 hover:text-orange-700 font-bold underline"
+                >
+                  ليس لديك حساب؟ إنشاء حساب جديد الآن
+                </button>
+              </div>
             </form>
           )}
 
@@ -281,7 +342,10 @@ export default function CustomerAuthModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setStep("phone")}
+                  onClick={() => {
+                    setStep("phone");
+                    setActiveTab("login");
+                  }}
                   className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-xs transition-all"
                 >
                   تعديل الرقم
@@ -290,12 +354,12 @@ export default function CustomerAuthModal({
             </form>
           )}
 
-          {/* STEP 2 (B): Register */}
-          {step === "register" && (
+          {/* STEP 2 (B): Register Mode */}
+          {activeTab === "register" && step === "register" && (
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="text-center border-b border-slate-100 pb-3">
                 <p className="text-xs text-slate-500 font-bold">
-                  إنشاء حساب جديد كلياً في منصة أساس لتوثيق وحفظ طلباتك
+                  قم بإنشاء حساب عميل جديد لتسجيل ومتابعة طلباتك بذكاء وسرعة
                 </p>
               </div>
 
@@ -318,12 +382,20 @@ export default function CustomerAuthModal({
 
               <div>
                 <label className="block text-xs font-black text-slate-700 mb-1.5">رقم الهاتف *</label>
-                <input
-                  type="tel"
-                  disabled
-                  value={phone}
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-500 cursor-not-allowed text-left"
-                />
+                <div className="relative">
+                  <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 pointer-events-none">
+                    <Phone className="h-4 w-4" />
+                  </span>
+                  <input
+                    type="tel"
+                    required
+                    dir="ltr"
+                    placeholder="077XXXXXXXX"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-9 pl-4 py-2.5 text-xs font-bold text-left focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                  />
+                </div>
               </div>
 
               <div>
@@ -367,10 +439,13 @@ export default function CustomerAuthModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setStep("phone")}
+                  onClick={() => {
+                    setActiveTab("login");
+                    setStep("phone");
+                  }}
                   className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-xs transition-all"
                 >
-                  إلغاء
+                  الرجوع لتسجيل الدخول
                 </button>
               </div>
             </form>

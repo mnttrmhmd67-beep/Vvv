@@ -5,46 +5,68 @@
 
 import React, { useState } from "react";
 import { Product, Order, Supplier, OrderStatus } from "../types";
-import { Truck, Phone, Lock, Calendar, ClipboardCheck, Play, Send, CheckCircle2, Navigation, MessageSquare, AlertCircle } from "lucide-react";
+import { Truck, Phone, Lock, Calendar, ClipboardCheck, Play, Send, CheckCircle2, Navigation, MessageSquare, AlertCircle, Ban } from "lucide-react";
+import { supplierLogin } from "../services/api";
 
 interface SupplierPageProps {
   orders: Order[];
   suppliers: Supplier[];
   onUpdateOrderStatus: (id: string, status: OrderStatus, supplierId?: string | null, note?: string) => Promise<any>;
+  loggedInSupplier?: Supplier | null;
+  onLoginSuccess?: (token: string, supplier: Supplier) => void;
+  onLogout?: () => void;
 }
 
 export default function SupplierPage({
   orders,
   suppliers,
-  onUpdateOrderStatus
+  onUpdateOrderStatus,
+  loggedInSupplier = null,
+  onLoginSuccess,
+  onLogout
 }: SupplierPageProps) {
   // Login State
   const [phone, setPhone] = useState("");
-  const [pin, setPin] = useState("");
-  const [loggedInSupplier, setLoggedInSupplier] = useState<Supplier | null>(null);
   const [authError, setAuthError] = useState("");
+
+  const pathParts = window.location.pathname.split("/");
+  const requestedSupplierId = pathParts[2] || null;
+
+  // Check if they are accessing a different supplier ID than logged in
+  const isUnauthorized = loggedInSupplier && requestedSupplierId && requestedSupplierId !== loggedInSupplier.id;
+
+  React.useEffect(() => {
+    // If logged in and at /supplier (no ID), redirect to their own ID page
+    if (loggedInSupplier && !requestedSupplierId) {
+      window.history.replaceState({}, "", `/supplier/${loggedInSupplier.id}`);
+    }
+  }, [loggedInSupplier, requestedSupplierId]);
 
   // Custom driver/note state for active orders
   const [deliveryNote, setDeliveryNote] = useState<{ [orderId: string]: string }>({});
 
-  const handleSupplierLogin = (e: React.FormEvent) => {
+  const handleSupplierLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const found = suppliers.find(
-      (s) => s.phone.trim() === phone.trim() && s.pin.trim() === pin.trim()
-    );
-
-    if (found) {
-      setLoggedInSupplier(found);
-      setAuthError("");
-    } else {
-      setAuthError("رقم الهاتف أو الرمز السري للمورد غير صحيح. يرجى مراجعة القائمة المعتمدة بالأسفل.");
+    try {
+      const res = await supplierLogin(phone);
+      if (res.success && res.token && res.user) {
+        if (onLoginSuccess) {
+          onLoginSuccess(res.token, res.user);
+        }
+        setAuthError("");
+      } else {
+        setAuthError("رقم الهاتف أو الرمز السري للمورد غير صحيح.");
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "حدث خطأ أثناء محاولة تسجيل الدخول.");
     }
   };
 
   const handleLogout = () => {
-    setLoggedInSupplier(null);
+    if (onLogout) {
+      onLogout();
+    }
     setPhone("");
-    setPin("");
   };
 
   // Filter orders assigned ONLY to this supplier
@@ -107,6 +129,36 @@ export default function SupplierPage({
   const shippedCount = assignedOrders.filter((o) => o.status === "ready").length;
   const completedCount = assignedOrders.filter((o) => o.status === "delivered").length;
 
+  if (isUnauthorized) {
+    return (
+      <div className="min-h-[80vh] flex flex-col items-center justify-center px-4 py-12">
+        <div className="absolute inset-0 opacity-5 bg-[radial-gradient(#ef4444_1px,transparent_1.5px)] [background-size:20px_20px] pointer-events-none"></div>
+        <div className="w-full max-w-md bg-slate-900 border-2 border-red-900/50 rounded-3xl shadow-2xl p-8 relative overflow-hidden text-center">
+          <div className="absolute top-0 left-0 w-full h-2 bg-red-600"></div>
+
+          <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-red-500/10 text-red-500 mb-6 border border-red-500/20 animate-pulse">
+            <Ban className="h-9 w-9" />
+          </div>
+
+          <h2 className="text-xl font-black text-white font-sans mb-3">غير مصرح بالوصول!</h2>
+          <p className="text-sm text-slate-300 mb-6 leading-relaxed">
+            عذراً، لا تملك الصلاحية للوصول إلى بيانات أو طلبات مورد آخر. تم منع هذا الإجراء لحماية أمن وسرية البيانات.
+          </p>
+
+          <button
+            onClick={() => {
+              window.history.pushState({}, "", `/supplier/${loggedInSupplier.id}`);
+              window.dispatchEvent(new Event("popstate"));
+            }}
+            className="w-full bg-orange-500 hover:bg-orange-600 text-slate-950 font-black py-3.5 rounded-xl text-xs transition-all shadow-lg hover:shadow-orange-500/20 cursor-pointer"
+          >
+            الذهاب إلى لوحة التحكم الخاصة بي
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!loggedInSupplier) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center px-4 py-12">
@@ -131,7 +183,6 @@ export default function SupplierPage({
                   <span className="text-white font-bold">{sup.name}</span>
                   <div className="flex gap-4">
                     <span>الهاتف: <strong className="text-white select-all">{sup.phone}</strong></span>
-                    <span>الرمز: <strong className="text-white select-all">{sup.pin}</strong></span>
                   </div>
                 </div>
               ))}
@@ -149,21 +200,6 @@ export default function SupplierPage({
                   placeholder="مثال: 07701111111"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pr-10 pl-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-right"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1.5 font-sans">الرمز السري الخاص بك (PIN) *</label>
-              <div className="relative">
-                <Lock className="absolute right-3.5 top-3.5 text-slate-500 h-4 w-4" />
-                <input
-                  type="password"
-                  required
-                  placeholder="200011"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pr-10 pl-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-right"
                 />
               </div>

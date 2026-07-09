@@ -5,7 +5,8 @@
 
 import React, { useState } from "react";
 import { Product, SteelType, Order, Supplier, OrderStatus, Customer } from "../types";
-import { Shield, Lock, Phone, Database, TrendingUp, Plus, Edit2, Trash2, Check, X, ArrowLeft, ArrowUpRight, ClipboardList, Tag, Image, Compass, HelpCircle, Truck, Users, Ban, UserCheck, Search, Eye, Calendar } from "lucide-react";
+import { Shield, Lock, Phone, Database, TrendingUp, Plus, Edit2, Trash2, Check, X, ArrowLeft, ArrowUpRight, ClipboardList, Tag, Image, Compass, HelpCircle, Truck, Users, Ban, UserCheck, Search, Eye, Calendar, LogOut } from "lucide-react";
+import { adminLogin } from "../services/api";
 
 interface AdminPageProps {
   products: Product[];
@@ -14,12 +15,17 @@ interface AdminPageProps {
   suppliers: Supplier[];
   customers: Customer[];
   onAddSteelType: (name: string) => Promise<any>;
+  onEditSteelType: (id: string, name: string) => Promise<any>;
+  onDeleteSteelType: (id: string) => Promise<any>;
   onAddProduct: (prod: Omit<Product, "id">) => Promise<any>;
   onEditProduct: (id: string, prod: Partial<Omit<Product, "id">>) => Promise<any>;
   onDeleteProduct: (id: string) => Promise<any>;
   onUpdateOrderStatus: (id: string, status: OrderStatus, supplierId?: string | null, note?: string) => Promise<any>;
   onAddSupplier: (sup: { name: string; phone: string; pin: string }) => Promise<any>;
   onUpdateCustomerStatus: (id: string, status: "active" | "suspended") => Promise<any>;
+  isLoggedIn?: boolean;
+  onLoginSuccess?: (token: string, user: any) => void;
+  onLogout?: () => void;
 }
 
 export default function AdminPage({
@@ -29,21 +35,29 @@ export default function AdminPage({
   suppliers,
   customers = [],
   onAddSteelType,
+  onEditSteelType,
+  onDeleteSteelType,
   onAddProduct,
   onEditProduct,
   onDeleteProduct,
   onUpdateOrderStatus,
   onAddSupplier,
-  onUpdateCustomerStatus
+  onUpdateCustomerStatus,
+  isLoggedIn = false,
+  onLoginSuccess,
+  onLogout
 }: AdminPageProps) {
   // Auth state
   const [phone, setPhone] = useState("");
   const [pin, setPin] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authError, setAuthError] = useState("");
 
   // Sub-tabs
   const [activeTab, setActiveTab] = useState<"stats" | "products" | "orders" | "suppliers" | "customers">("stats");
+
+  // Steel Type Editing state
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
+  const [editingTypeName, setEditingTypeName] = useState("");
 
   // Forms states
   const [newTypeName, setNewTypeName] = useState("");
@@ -105,13 +119,20 @@ export default function AdminPage({
   };
 
   // Handle Admin Login
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (phone.trim() === "07732670436" && pin.trim() === "200011") {
-      setIsLoggedIn(true);
-      setAuthError("");
-    } else {
-      setAuthError("رقم الهاتف أو رمز الدخول غير صحيح! يرجى استخدام بيانات الدخول المعتمدة الموضحة.");
+    try {
+      const res = await adminLogin(phone, pin);
+      if (res.success && res.token) {
+        if (onLoginSuccess) {
+          onLoginSuccess(res.token, res.user);
+        }
+        setAuthError("");
+      } else {
+        setAuthError("رقم الهاتف أو رمز الدخول غير صحيح! يرجى التحقق من المدخلات.");
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "حدث خطأ أثناء محاولة تسجيل الدخول.");
     }
   };
 
@@ -125,6 +146,35 @@ export default function AdminPage({
       alert("تمت إضافة نوع حديد التسليح بنجاح!");
     } catch (err: any) {
       alert("خطأ: " + err.message);
+    }
+  };
+
+  // Save steel type edit
+  const handleSaveSteelTypeEdit = async (id: string) => {
+    if (!editingTypeName.trim()) return;
+    try {
+      await onEditSteelType(id, editingTypeName.trim());
+      setEditingTypeId(null);
+      setEditingTypeName("");
+      alert("تم تعديل نوع حديد التسليح بنجاح!");
+    } catch (err: any) {
+      alert("خطأ: " + err.message);
+    }
+  };
+
+  // Delete steel type
+  const handleDeleteSteelTypeClick = async (id: string, name: string) => {
+    if (confirm(`هل أنت متأكد من حذف نوع حديد التسليح (${name}) نهائياً؟ قد يؤثر هذا على المنتجات المرتبطة به.`)) {
+      try {
+        await onDeleteSteelType(id);
+        if (editingTypeId === id) {
+          setEditingTypeId(null);
+          setEditingTypeName("");
+        }
+        alert("تم حذف نوع حديد التسليح بنجاح.");
+      } catch (err: any) {
+        alert("خطأ: " + err.message);
+      }
     }
   };
 
@@ -296,15 +346,6 @@ export default function AdminPage({
             <p className="text-xs text-slate-400 mt-1.5 font-medium">منصة أساس لتجهيز حديد التسليح</p>
           </div>
 
-          {/* Test Credentials Box */}
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-right mb-6 text-xs text-slate-300 leading-relaxed font-semibold">
-            <span className="text-orange-500 font-black block mb-1">بيانات الدخول المعتمدة للتجربة:</span>
-            <div className="flex justify-between mt-1">
-              <span>رقم الهاتف: <strong className="text-white select-all">07732670436</strong></span>
-              <span>رمز الدخول: <strong className="text-white select-all">200011</strong></span>
-            </div>
-          </div>
-
           <form onSubmit={handleLogin} className="space-y-5 text-right">
             <div>
               <label className="block text-xs font-bold text-slate-400 mb-1.5">رقم هاتف المدير *</label>
@@ -313,7 +354,7 @@ export default function AdminPage({
                 <input
                   type="text"
                   required
-                  placeholder="07732670436"
+                  placeholder="أدخل رقم هاتف المدير"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pr-10 pl-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-right"
@@ -328,7 +369,7 @@ export default function AdminPage({
                 <input
                   type="password"
                   required
-                  placeholder="200011"
+                  placeholder="أدخل رمز الدخول السري"
                   value={pin}
                   onChange={(e) => setPin(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl pr-10 pl-4 py-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-right"
@@ -366,6 +407,15 @@ export default function AdminPage({
             <h1 className="text-xl font-black font-sans text-orange-500">لوحة تحكم المدير العام</h1>
             <p className="text-xs text-slate-400 font-medium mt-0.5">منصة أساس لبيع وتوريد حديد التسليح</p>
           </div>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="mr-4 flex items-center space-x-1.5 space-x-reverse px-3 py-1.5 bg-red-650 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>تسجيل الخروج</span>
+            </button>
+          )}
         </div>
 
         {/* Tab Selector Links */}
@@ -501,12 +551,74 @@ export default function AdminPage({
               {/* Steel types count list */}
               <div className="mt-5 text-right">
                 <h4 className="text-[10px] font-black text-slate-400 mb-2">الأنواع الحالية المسجلة:</h4>
-                <div className="flex flex-wrap gap-2">
-                  {steelTypes.map((t) => (
-                    <span key={t.id} className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-md border border-slate-200">
-                      {t.name}
-                    </span>
-                  ))}
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {steelTypes.map((t) => {
+                    const isEditing = editingTypeId === t.id;
+                    return (
+                      <div
+                        key={t.id}
+                        className="flex items-center justify-between bg-slate-50 text-slate-700 text-[11px] font-bold px-3 py-2 rounded-xl border border-slate-200"
+                      >
+                        {isEditing ? (
+                          <div className="flex items-center gap-2 w-full flex-row-reverse">
+                            <input
+                              type="text"
+                              value={editingTypeName}
+                              onChange={(e) => setEditingTypeName(e.target.value)}
+                              className="flex-grow bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-orange-500 text-right"
+                              autoFocus
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleSaveSteelTypeEdit(t.id)}
+                                className="p-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all shrink-0"
+                                title="حفظ"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingTypeId(null);
+                                  setEditingTypeName("");
+                                }}
+                                className="p-1 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition-all shrink-0"
+                                title="إلغاء"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between w-full flex-row-reverse">
+                            <span className="text-slate-800 font-extrabold">{t.name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingTypeId(t.id);
+                                  setEditingTypeName(t.name);
+                                }}
+                                className="p-1 text-slate-400 hover:text-orange-500 hover:bg-slate-100 rounded transition-all"
+                                title="تعديل الاسم"
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSteelTypeClick(t.id, t.name)}
+                                className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded transition-all"
+                                title="حذف النوع"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

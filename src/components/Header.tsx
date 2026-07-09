@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { HardHat, Shield, Truck, ShoppingCart, ClipboardList, RefreshCw, User, LogOut } from "lucide-react";
-import { CartItem, Customer } from "../types";
+import { HardHat, Shield, Truck, ShoppingCart, ClipboardList, RefreshCw, User, LogOut, HelpCircle } from "lucide-react";
+import { CartItem, Customer, Supplier } from "../types";
 
 interface HeaderProps {
-  currentView: "client" | "admin" | "supplier";
-  setView: (view: "client" | "admin" | "supplier") => void;
+  currentView: "client" | "admin" | "supplier" | "support";
+  setView: (view: "client" | "admin" | "supplier" | "support") => void;
   cart: CartItem[];
   toggleCartOpen: () => void;
   onRefresh: () => void;
@@ -16,6 +16,8 @@ interface HeaderProps {
   currentCustomer: Customer | null;
   onLogout: () => void;
   onOpenAuthModal: () => void;
+  isAdminLoggedIn?: boolean;
+  currentSupplier?: Supplier | null;
 }
 
 export default function Header({
@@ -27,17 +29,20 @@ export default function Header({
   loading,
   currentCustomer,
   onLogout,
-  onOpenAuthModal
+  onOpenAuthModal,
+  isAdminLoggedIn = false,
+  currentSupplier = null
 }: HeaderProps) {
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
   // Sync URL paths with view selection for Vercel/routing consistency
-  const handleViewChange = (view: "client" | "admin" | "supplier") => {
+  const handleViewChange = (view: "client" | "admin" | "supplier" | "support") => {
     setView(view);
     const paths = {
       client: "/",
       admin: "/admin",
-      supplier: "/supplier"
+      supplier: "/supplier",
+      support: "/support"
     };
     window.history.pushState({}, "", paths[view]);
   };
@@ -101,6 +106,19 @@ export default function Header({
               <Truck className="h-4.5 w-4.5" />
               <span>بوابة المورد</span>
             </button>
+
+            <button
+              id="nav-support-btn"
+              onClick={() => handleViewChange("support")}
+              className={`flex items-center space-x-2 space-x-reverse px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 ${
+                currentView === "support"
+                  ? "bg-orange-500 text-slate-950 shadow-md"
+                  : "text-slate-300 hover:bg-slate-900 hover:text-white"
+              }`}
+            >
+              <HelpCircle className="h-4.5 w-4.5" />
+              <span>الدعم الفني</span>
+            </button>
           </nav>
 
           {/* Utility buttons */}
@@ -130,15 +148,39 @@ export default function Header({
               )}
             </button>
 
-            {/* Customer Auth Profile Button */}
-            {currentCustomer ? (
+            {/* Auth Profile Button */}
+            {isAdminLoggedIn ? (
+              <div className="flex items-center space-x-2 space-x-reverse bg-orange-500/10 border border-orange-500/30 px-3 py-1.5 rounded-xl">
+                <Shield className="h-4 w-4 text-orange-500 animate-pulse" />
+                <span className="text-xs font-black text-orange-400">المدير العام</span>
+                <button 
+                  onClick={onLogout} 
+                  title="تسجيل الخروج" 
+                  className="text-slate-400 hover:text-red-400 p-1 transition-colors cursor-pointer"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            ) : currentSupplier ? (
+              <div className="flex items-center space-x-2 space-x-reverse bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl">
+                <Truck className="h-4 w-4 text-orange-500 animate-pulse" />
+                <span className="text-xs font-black text-slate-200 truncate max-w-[120px]">{currentSupplier.name}</span>
+                <button 
+                  onClick={onLogout} 
+                  title="تسجيل الخروج" 
+                  className="text-slate-400 hover:text-red-400 p-1 transition-colors cursor-pointer"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            ) : currentCustomer ? (
               <div className="flex items-center space-x-2 space-x-reverse bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl">
                 <User className="h-4 w-4 text-orange-500" />
                 <span className="text-xs font-black text-slate-200 truncate max-w-[120px]">{currentCustomer.name}</span>
                 <button 
                   onClick={onLogout} 
                   title="تسجيل الخروج" 
-                  className="text-slate-400 hover:text-red-400 p-1 transition-colors"
+                  className="text-slate-400 hover:text-red-400 p-1 transition-colors cursor-pointer"
                 >
                   <LogOut className="h-4 w-4" />
                 </button>
@@ -183,6 +225,15 @@ export default function Header({
           >
             <Truck className="h-4 w-4" />
             <span>المورد</span>
+          </button>
+          <button
+            onClick={() => handleViewChange("support")}
+            className={`flex items-center space-x-1.5 space-x-reverse px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+              currentView === "support" ? "bg-orange-500 text-slate-950" : "bg-slate-850 text-slate-300"
+            }`}
+          >
+            <HelpCircle className="h-4 w-4" />
+            <span>الدعم</span>
           </button>
         </div>
       </div>

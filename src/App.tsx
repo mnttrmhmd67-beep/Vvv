@@ -8,23 +8,28 @@ import Header from "./components/Header";
 import ClientPage from "./components/ClientPage";
 import AdminPage from "./components/AdminPage";
 import SupplierPage from "./components/SupplierPage";
+import SupportPage from "./components/SupportPage";
 import CustomerAuthModal from "./components/CustomerAuthModal";
 import { Product, SteelType, Order, Supplier, CartItem, OrderStatus, Customer } from "./types";
 import {
   fetchAppState,
   addSteelType,
+  editSteelType,
+  deleteSteelType,
   addProduct,
   editProduct,
   deleteProduct,
   createOrder,
   updateOrderStatus,
   addSupplier,
-  updateCustomerStatus
+  updateCustomerStatus,
+  verifySession,
+  logoutSession
 } from "./services/api";
 import { HardHat } from "lucide-react";
 
 export default function App() {
-  const [currentView, setView] = useState<"client" | "admin" | "supplier">("client");
+  const [currentView, setView] = useState<"client" | "admin" | "supplier" | "support">("client");
   const [products, setProducts] = useState<Product[]>([]);
   const [steelTypes, setSteelTypes] = useState<SteelType[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -34,11 +39,11 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Customer states
-  const [currentCustomer, setCurrentCustomer] = useState<Customer | null>(() => {
-    const saved = localStorage.getItem("asas_current_customer");
-    return saved ? JSON.parse(saved) : null;
-  });
+  // Authentication & Session persistence states
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [currentSupplier, setCurrentSupplier] = useState<Supplier | null>(null);
+  const [currentCustomer, setCurrentCustomer] = useState<Customer | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   // Synchronize routing path with browser location
@@ -47,8 +52,10 @@ export default function App() {
       const path = window.location.pathname;
       if (path === "/admin") {
         setView("admin");
-      } else if (path === "/supplier") {
+      } else if (path === "/supplier" || path.startsWith("/supplier/")) {
         setView("supplier");
+      } else if (path === "/support") {
+        setView("support");
       } else {
         setView("client");
       }
@@ -96,9 +103,89 @@ export default function App() {
     }
   };
 
+  // Check session token on initial mount
+  const checkSession = async () => {
+    const token = localStorage.getItem("asas_session_token");
+    if (token) {
+      try {
+        const res = await verifySession(token);
+        if (res.success) {
+          if (res.role === "admin") {
+            setIsAdminLoggedIn(true);
+            setView("admin");
+            if (window.location.pathname !== "/admin") {
+              window.history.replaceState({}, "", "/admin");
+            }
+          } else if (res.role === "supplier") {
+            setCurrentSupplier(res.user);
+            setView("supplier");
+            if (!window.location.pathname.startsWith("/supplier/")) {
+              window.history.replaceState({}, "", `/supplier/${res.user.id}`);
+            }
+          } else if (res.role === "customer") {
+            setCurrentCustomer(res.user);
+            localStorage.setItem("asas_current_customer", JSON.stringify(res.user));
+          }
+        } else {
+          // Token expired or invalid, clear
+          localStorage.removeItem("asas_session_token");
+          localStorage.removeItem("asas_current_customer");
+        }
+      } catch (e) {
+        console.warn("Session validation failed:", e);
+        localStorage.removeItem("asas_session_token");
+        localStorage.removeItem("asas_current_customer");
+      }
+    }
+    setAuthChecking(false);
+  };
+
   useEffect(() => {
-    syncState();
+    const init = async () => {
+      await syncState();
+      await checkSession();
+    };
+    init();
   }, []);
+
+  const handleAdminLoginSuccess = (token: string, user: any) => {
+    localStorage.setItem("asas_session_token", token);
+    setIsAdminLoggedIn(true);
+    setView("admin");
+    window.history.pushState({}, "", "/admin");
+  };
+
+  const handleSupplierLoginSuccess = (token: string, supplier: Supplier) => {
+    localStorage.setItem("asas_session_token", token);
+    setCurrentSupplier(supplier);
+    setView("supplier");
+    window.history.pushState({}, "", `/supplier/${supplier.id}`);
+  };
+
+  const handleCustomerLoginSuccess = (token: string, customer: Customer) => {
+    localStorage.setItem("asas_session_token", token);
+    setCurrentCustomer(customer);
+    localStorage.setItem("asas_current_customer", JSON.stringify(customer));
+    setAuthModalOpen(false);
+  };
+
+  const handleLogoutAction = async () => {
+    const token = localStorage.getItem("asas_session_token");
+    if (token) {
+      try {
+        await logoutSession(token);
+      } catch (err) {
+        console.warn("Server logout failed, proceeding locally", err);
+      }
+    }
+    localStorage.removeItem("asas_session_token");
+    localStorage.removeItem("asas_current_customer");
+    setIsAdminLoggedIn(false);
+    setCurrentSupplier(null);
+    setCurrentCustomer(null);
+    setView("client");
+    window.history.pushState({}, "", "/");
+  };
 
   // ---------------------------------------------------------------------------
   // Cart Actions
@@ -143,6 +230,18 @@ export default function App() {
     const newType = await addSteelType(name);
     setSteelTypes((prev) => [...prev, newType]);
     return newType;
+  };
+
+  const handleEditSteelTypeAction = async (id: string, name: string) => {
+    const updated = await editSteelType(id, name);
+    setSteelTypes((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    return updated;
+  };
+
+  const handleDeleteSteelTypeAction = async (id: string) => {
+    await deleteSteelType(id);
+    setSteelTypes((prev) => prev.filter((t) => t.id !== id));
+    return true;
   };
 
   const handleAddProductAction = async (prodData: Omit<Product, "id">) => {
@@ -244,6 +343,15 @@ export default function App() {
     return updatedCustomer;
   };
 
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white p-4">
+        <HardHat className="h-12 w-12 text-orange-500 animate-bounce mb-4" />
+        <p className="text-sm font-bold text-slate-300">يرجى الانتظار، جاري تحميل منصة أساس وتأمين الجلسة...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col antialiased">
       {/* Header component */}
@@ -255,11 +363,10 @@ export default function App() {
         onRefresh={syncState}
         loading={loading}
         currentCustomer={currentCustomer}
-        onLogout={() => {
-          setCurrentCustomer(null);
-          localStorage.removeItem("asas_current_customer");
-        }}
+        onLogout={handleLogoutAction}
         onOpenAuthModal={() => setAuthModalOpen(true)}
+        isAdminLoggedIn={isAdminLoggedIn}
+        currentSupplier={currentSupplier}
       />
 
       {/* Main Content Render */}
@@ -300,12 +407,17 @@ export default function App() {
                 suppliers={suppliers}
                 customers={customers}
                 onAddSteelType={handleAddSteelTypeAction}
+                onEditSteelType={handleEditSteelTypeAction}
+                onDeleteSteelType={handleDeleteSteelTypeAction}
                 onAddProduct={handleAddProductAction}
                 onEditProduct={handleEditProductAction}
                 onDeleteProduct={handleDeleteProductAction}
                 onUpdateOrderStatus={handleUpdateOrderStatusAction}
                 onAddSupplier={handleAddSupplierAction}
                 onUpdateCustomerStatus={handleUpdateCustomerStatusAction}
+                isLoggedIn={isAdminLoggedIn}
+                onLoginSuccess={handleAdminLoginSuccess}
+                onLogout={handleLogoutAction}
               />
             )}
 
@@ -314,6 +426,18 @@ export default function App() {
                 orders={orders}
                 suppliers={suppliers}
                 onUpdateOrderStatus={handleUpdateOrderStatusAction}
+                loggedInSupplier={currentSupplier}
+                onLoginSuccess={handleSupplierLoginSuccess}
+                onLogout={handleLogoutAction}
+              />
+            )}
+
+            {currentView === "support" && (
+              <SupportPage
+                onBackToApp={() => {
+                  setView("client");
+                  window.history.pushState({}, "", "/");
+                }}
               />
             )}
           </div>
@@ -334,7 +458,7 @@ export default function App() {
       <CustomerAuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        onLoginSuccess={(customer) => setCurrentCustomer(customer)}
+        onLoginSuccess={handleCustomerLoginSuccess}
       />
     </div>
   );
