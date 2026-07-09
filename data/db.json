@@ -1,0 +1,219 @@
+{
+  "steelTypes": [
+    {
+      "id": "st-1",
+      "name": "حديد تركي (إسكندرون)"
+    },
+    {
+      "id": "st-2",
+      "name": "حديد عراقي (أربيل)"
+    },
+    {
+      "id": "st-3",
+      "name": "حديد إماراتي (الإمارات)"
+    },
+    {
+      "id": "st-4",
+      "name": "حديد سابك (السعودية)"
+    },
+    {
+      "id": "st-1783605815363",
+      "name": "عربييي"
+    },
+    {
+      "id": "st-1783605864249",
+      "name": "ايراني"
+    }
+  ],
+  "products": [
+    {
+      "id": "p-1",
+      "name": "شيش حديد تسليح قياس 12 ملم",
+      "typeId": "st-1",
+      "diameter": "12 ملم",
+      "price": 950000,
+      "quantity": 120,
+      "imageUrl": "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80"
+    },
+    {
+      "id": "p-2",
+      "name": "شيش حديد تسليح قياس 16 ملم",
+      "typeId": "st-2",
+      "diameter": "16 ملم",
+      "price": 910000,
+      "quantity": 85,
+      "imageUrl": "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=600&q=80"
+    },
+    {
+      "id": "p-3",
+      "name": "شيش حديد تسليح قياس 10 ملم",
+      "typeId": "st-3",
+      "diameter": "10 ملم",
+      "price": 980000,
+      "quantity": 60,
+      "imageUrl": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80"
+    },
+    {
+      "id": "p-4",
+      "name": "حديد تسليح قياس 25 ملم ثقيل",
+      "typeId": "st-1",
+      "diameter": "25 ملم",
+      "price": 960000,
+      "quantity": 40,
+      "imageUrl": "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80"
+    },
+    {
+      "id": "p-5",
+      "name": "لفات سلك ربط حديد ناعم",
+      "typeId": "st-2",
+      "diameter": "1.5 ملم",
+      "price": 1100000,
+      "quantity": 15,
+      "imageUrl": "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=600&q=80"
+    },
+    {
+      "id": "p-1783605884063",
+      "name": "شيش 12",
+      "typeId": "st-1783605864249",
+      "diameter": "12 ملم",
+      "price": 950000,
+      "quantity": 50,
+      "imageUrl": "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80"
+    }
+  ],
+  "suppliers": [
+    {
+      "id": "sup-1",
+      "name": "مذخر حديد الرافدين",
+      "phone": "07701111111",
+      "pin": "100020",
+      "status": "active"
+    },
+    {
+      "id": "sup-2",
+      "name": "شركة نينوى للتجهيزات الإنشائية",
+      "phone": "07702222222",
+      "pin": "100030",
+      "status": "active"
+    },
+    {
+      "id": "sup-3",
+      "name": "مورد حديد الفرات الأوسط",
+      "phone": "07703333333",
+      "pin": "100040",
+      "status": "active"
+    },
+    {
+      "id": "sup-1783607491175",
+      "name": "ممم",
+      "managerName": "محمد",
+      "phone": "07723453212",
+      "governorate": "بغداد",
+      "address": "حح",
+      "createdAt": "2026-07-09T14:31:31.175Z",
+      "status": "pending"
+    },
+    {
+      "id": "sup-1783608527900",
+      "name": "تست شركة مورد",
+      "managerName": "تست مسؤول",
+      "phone": "07708888888",
+      "governorate": "بغداد",
+      "address": "المنصور",
+      "createdAt": "2026-07-09T14:48:47.900Z",
+      "status": "pending"
+    }
+  ],
+  "orders": [],
+  "customers": [
+    {
+      "id": "cust-1783605764050",
+      "name": "محمد",
+      "phone": "07725877251",
+      "governorate": "بغداد",
+      "address": "",
+      "createdAt": "2026-07-09T14:02:44.050Z",
+      "status": "active"
+    },
+    {
+      "id": "cust-1783608521442",
+      "name": "تست عميل",
+      "phone": "07709999999",
+      "governorate": "بغداد",
+      "address": "الكرادة",
+      "createdAt": "2026-07-09T14:48:41.442Z",
+      "status": "active"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "sess_5s3f4d9niwn_1783605764051",
+      "role": "customer",
+      "phone": "07725877251",
+      "userId": "cust-1783605764050",
+      "user": {
+        "id": "cust-1783605764050",
+        "name": "محمد",
+        "phone": "07725877251",
+        "governorate": "بغداد",
+        "address": "",
+        "createdAt": "2026-07-09T14:02:44.050Z",
+        "status": "active"
+      },
+      "expiresAt": "2026-07-10T14:02:44.051Z"
+    },
+    {
+      "id": "sess_vja44ljrz6e_1783605780803",
+      "role": "admin",
+      "phone": "07732670436",
+      "userId": "admin",
+      "user": {
+        "name": "المدير العام",
+        "phone": "07732670436"
+      },
+      "expiresAt": "2026-07-10T14:03:00.803Z"
+    },
+    {
+      "id": "sess_epzbc71ph6f_1783608521443",
+      "role": "customer",
+      "phone": "07709999999",
+      "userId": "cust-1783608521442",
+      "user": {
+        "id": "cust-1783608521442",
+        "name": "تست عميل",
+        "phone": "07709999999",
+        "governorate": "بغداد",
+        "address": "الكرادة",
+        "createdAt": "2026-07-09T14:48:41.442Z",
+        "status": "active"
+      },
+      "expiresAt": "2026-07-10T14:48:41.443Z"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "notif-1783607491175-sup",
+      "type": "supplier_registered",
+      "title": "🆕 طلب تسجيل مورد جديد",
+      "message": "🆕 تم تسجيل مورد جديد (بانتظار الموافقة)\nالشركة: ممم\nالمسؤول: محمد\nالهاتف: 07723453212\nالمحافظة: بغداد",
+      "createdAt": "2026-07-09T14:31:31.175Z",
+      "read": false
+    },
+    {
+      "id": "notif-1783608521442-cust",
+      "type": "customer_registered",
+      "title": "🆕 حساب عميل جديد",
+      "message": "🆕 تم إنشاء حساب عميل جديد\nالاسم: تست عميل\nالهاتف: 07709999999",
+      "createdAt": "2026-07-09T14:48:41.442Z",
+      "read": false
+    },
+    {
+      "id": "notif-1783608527900-sup",
+      "type": "supplier_registered",
+      "title": "🆕 طلب تسجيل مورد جديد",
+      "message": "🆕 تم تسجيل مورد جديد (بانتظار الموافقة)\nالشركة: تست شركة مورد\nالمسؤول: تست مسؤول\nالهاتف: 07708888888\nالمحافظة: بغداد",
+      "createdAt": "2026-07-09T14:48:47.900Z",
+      "read": false
+    }
+  ]
+}

@@ -208,6 +208,10 @@ async function startServer() {
 
   // Middleware
   app.use(express.json());
+  app.use((req, res, next) => {
+    console.log(`[Asas Server] ${req.method} ${req.url}`);
+    next();
+  });
 
   // Init DB log
   initDb();
@@ -394,7 +398,7 @@ async function startServer() {
         return res.status(400).json({ error: "رقم الهاتف مطلوب" });
       }
       const db = getDb();
-      const customer = db.customers.find((c: any) => c.phone === phone);
+      const customer = db.customers.find((c: any) => c && c.phone === phone);
       if (customer && customer.status === "suspended") {
         return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
       }
@@ -413,7 +417,7 @@ async function startServer() {
       }
 
       const db = getDb();
-      const customer = db.customers.find((c: any) => c.phone === phone);
+      const customer = db.customers.find((c: any) => c && c.phone === phone);
       if (customer && customer.status === "suspended") {
         return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
       }
@@ -445,7 +449,7 @@ async function startServer() {
       }
 
       const db = getDb();
-      const customer = db.customers.find((c: any) => c.phone === phone);
+      const customer = db.customers.find((c: any) => c && c.phone === phone);
       if (customer && customer.status === "suspended") {
         return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
       }
@@ -644,7 +648,7 @@ async function startServer() {
 
       const db = getDb();
       db.sessions = db.sessions || [];
-      const session = db.sessions.find((s: any) => s.id === token);
+      const session = db.sessions.find((s: any) => s && s.id === token);
 
       if (!session) {
         return res.status(401).json({ error: "Invalid session token" });
@@ -653,16 +657,16 @@ async function startServer() {
       const now = Date.now();
       if (new Date(session.expiresAt).getTime() < now) {
         // Expired
-        db.sessions = db.sessions.filter((s: any) => s.id !== token);
+        db.sessions = db.sessions.filter((s: any) => s && s.id !== token);
         saveDb(db);
         return res.status(401).json({ error: "Session token expired" });
       }
 
       // Check if user is suspended (if customer)
       if (session.role === "customer") {
-        const customer = db.customers.find((c: any) => c.id === session.userId);
+        const customer = db.customers.find((c: any) => c && c.id === session.userId);
         if (customer && customer.status === "suspended") {
-          db.sessions = db.sessions.filter((s: any) => s.id !== token);
+          db.sessions = db.sessions.filter((s: any) => s && s.id !== token);
           saveDb(db);
           return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
         }
@@ -675,7 +679,7 @@ async function startServer() {
 
       // Check if supplier is active
       if (session.role === "supplier") {
-        const supplier = db.suppliers.find((s: any) => s.id === session.userId);
+        const supplier = db.suppliers.find((s: any) => s && s.id === session.userId);
         if (supplier) {
           const status = supplier.status || "active";
           if (status !== "active") {
@@ -823,7 +827,7 @@ async function startServer() {
       const db = getDb();
       
       // Verify if customer is suspended
-      const existingCustomer = db.customers.find((c: any) => c.phone === clientPhone);
+      const existingCustomer = db.customers.find((c: any) => c && c.phone === clientPhone);
       if (existingCustomer && existingCustomer.status === "suspended") {
         return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
       }
@@ -833,7 +837,7 @@ async function startServer() {
 
       // Validate products and stock
       for (const item of items) {
-        const prod = db.products.find((p: any) => p.id === item.productId);
+        const prod = db.products.find((p: any) => p && p.id === item.productId);
         if (!prod) {
           return res.status(400).json({ error: `المنتج ذو الرمز ${item.productId} غير متوفر` });
         }
@@ -844,7 +848,7 @@ async function startServer() {
         // Deduct quantity immediately
         prod.quantity -= item.quantity;
 
-        const steelType = db.steelTypes.find((t: any) => t.id === prod.typeId);
+        const steelType = db.steelTypes.find((t: any) => t && t.id === prod.typeId);
         const typeName = steelType ? steelType.name : "حديد عام";
 
         processedItems.push({
@@ -947,7 +951,7 @@ async function startServer() {
       // If order is rejected, return the stock
       if (status === "rejected") {
         for (const item of order.items) {
-          const prod = db.products.find((p: any) => p.id === item.productId);
+          const prod = db.products.find((p: any) => p && p.id === item.productId);
           if (prod) {
             prod.quantity += item.quantity;
           }
@@ -975,7 +979,7 @@ async function startServer() {
           (order.supplierId && oldSupplierId !== order.supplierId)
         ) {
           // 3. Assigned to supplier
-          const supplierObj = db.suppliers.find((s: any) => s.id === order.supplierId);
+          const supplierObj = db.suppliers.find((s: any) => s && s.id === order.supplierId);
           const supplierName = supplierObj ? supplierObj.name : "غير محدد";
           waText = `🚚 تحويل طلب إلى المورد في منصة أساس\n` +
             `رقم الطلب: #${order.id}\n` +
