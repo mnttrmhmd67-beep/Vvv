@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Product, SteelType, Order, CartItem, Customer } from "../types";
-import { Search, ShoppingCart, Info, HardHat, Check, User, Phone, MapPin, ClipboardCheck, ArrowLeft, Clock, Truck, Save, ShieldAlert, MessageCircle, Send } from "lucide-react";
+import { Search, ShoppingCart, Info, HardHat, Check, User, Phone, MapPin, ClipboardCheck, ArrowLeft, Clock, Truck, Save, ShieldAlert, MessageCircle, Send, Bell, X } from "lucide-react";
 import { updateCustomerProfile } from "../services/api";
 
 interface ClientPageProps {
@@ -100,6 +100,66 @@ export default function ClientPage({
   const sortedOrdersToDisplay = [...ordersToDisplay].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
+
+  // State for order status change visual notifications
+  const [notifications, setNotifications] = useState<{
+    orderId: string;
+    oldStatus: string;
+    newStatus: string;
+    clientName: string;
+  }[]>([]);
+
+  // Track order status changes
+  useEffect(() => {
+    if (!ordersToDisplay || ordersToDisplay.length === 0) return;
+
+    const storedStatusesKey = "asas_client_order_statuses";
+    let storedStatuses: Record<string, string> = {};
+    try {
+      const saved = localStorage.getItem(storedStatusesKey);
+      if (saved) {
+        storedStatuses = JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Failed to parse stored order statuses", e);
+    }
+
+    const currentStatuses: Record<string, string> = {};
+    const newNotifications: {
+      orderId: string;
+      oldStatus: string;
+      newStatus: string;
+      clientName: string;
+    }[] = [];
+
+    ordersToDisplay.forEach((order) => {
+      currentStatuses[order.id] = order.status;
+
+      // If we have a stored status, and it is different from the current status, trigger a notification!
+      if (storedStatuses[order.id] && storedStatuses[order.id] !== order.status) {
+        newNotifications.push({
+          orderId: order.id,
+          oldStatus: storedStatuses[order.id],
+          newStatus: order.status,
+          clientName: order.clientName,
+        });
+      }
+    });
+
+    if (newNotifications.length > 0) {
+      setNotifications((prev) => {
+        const existingIds = new Set(prev.map(n => `${n.orderId}-${n.newStatus}`));
+        const filteredNew = newNotifications.filter(n => !existingIds.has(`${n.orderId}-${n.newStatus}`));
+        return [...prev, ...filteredNew];
+      });
+    }
+
+    try {
+      localStorage.setItem(storedStatusesKey, JSON.stringify(currentStatuses));
+    } catch (e) {
+      console.error("Failed to save order statuses to localStorage", e);
+    }
+  }, [ordersToDisplay]);
 
   // Synchronize state with logged in customer
   useEffect(() => {
@@ -259,21 +319,55 @@ ${productsText}
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending_review":
-        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">قيد المراجعة</span>;
+        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1"><Clock className="h-3 w-3" /> قيد المراجعة</span>;
       case "approved":
-        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">تمت الموافقة</span>;
+        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1"><Check className="h-3 w-3" /> تمت الموافقة</span>;
       case "assigned":
-        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-sky-100 text-sky-800 border border-sky-200">تم تحويل الطلب إلى المورد</span>;
+        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-sky-50 text-sky-700 border border-sky-200 flex items-center gap-1"><User className="h-3 w-3" /> تم تحويل الطلب إلى المورد</span>;
       case "preparing":
-        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">قيد التجهيز</span>;
+        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1"><HardHat className="h-3 w-3 animate-pulse" /> قيد التجهيز</span>;
       case "ready":
-        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-violet-100 text-violet-800 border border-violet-200">جاهز للتسليم</span>;
+        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-violet-100 text-violet-800 border border-violet-200 font-sans flex items-center gap-1"><Truck className="h-3.5 w-3.5 animate-bounce" /> جاري التوصيل (جاهز)</span>;
       case "delivered":
-        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-green-100 text-emerald-800 border border-green-200 font-sans">تم التسليم</span>;
+        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 font-sans flex items-center gap-1"><Check className="h-3.5 w-3.5 font-bold" /> مكتمل (تم التسليم)</span>;
       case "rejected":
-        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-red-100 text-red-800 border border-red-200">مرفوض</span>;
+        return <span className="px-3 py-1 text-xs font-bold rounded-full bg-rose-50 text-red-700 border border-rose-200 flex items-center gap-1"><ShieldAlert className="h-3 w-3" /> مرفوض</span>;
       default:
         return <span className="px-3 py-1 text-xs font-bold rounded-full bg-gray-100 text-gray-800">{status}</span>;
+    }
+  };
+
+  const getStatusNameArabic = (status: string) => {
+    switch (status) {
+      case "pending_review": return "قيد المراجعة";
+      case "approved": return "تمت الموافقة";
+      case "assigned": return "تم تحويل الطلب إلى المورد";
+      case "preparing": return "قيد التجهيز";
+      case "ready": return "جاري التوصيل / جاهز للتسليم";
+      case "delivered": return "مكتمل / تم التسليم";
+      case "rejected": return "مرفوض";
+      default: return status;
+    }
+  };
+
+  const getOrderCardStyles = (status: string) => {
+    switch (status) {
+      case "pending_review":
+        return "border-slate-200 bg-white hover:border-slate-300 border-r-4 border-r-slate-400 shadow-xs";
+      case "approved":
+        return "border-indigo-100 bg-indigo-50/20 hover:border-indigo-200 border-r-4 border-r-indigo-500 ring-1 ring-indigo-50/50 shadow-xs";
+      case "assigned":
+        return "border-sky-100 bg-sky-50/20 hover:border-sky-200 border-r-4 border-r-sky-500 ring-1 ring-sky-50/50 shadow-xs";
+      case "preparing":
+        return "border-amber-200 bg-amber-50/10 hover:border-amber-300 border-r-4 border-r-amber-500 ring-1 ring-amber-50/30 shadow-xs";
+      case "ready":
+        return "border-violet-300 bg-violet-50/30 hover:border-violet-400 border-r-4 border-r-violet-600 ring-2 ring-violet-500/5 shadow-md shadow-violet-500/5 animate-pulse-subtle";
+      case "delivered":
+        return "border-emerald-200 bg-emerald-50/15 hover:border-emerald-300 border-r-4 border-r-emerald-600 ring-1 ring-emerald-50/30 shadow-xs";
+      case "rejected":
+        return "border-red-200 bg-red-50/15 hover:border-red-300 border-r-4 border-r-red-500 shadow-xs";
+      default:
+        return "border-slate-200 bg-white hover:border-slate-300 border-r-4 border-r-slate-400 shadow-xs";
     }
   };
 
@@ -334,6 +428,38 @@ ${productsText}
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10">
+        {/* Visual Order Status Change Notifications */}
+        {notifications.length > 0 && (
+          <div className="mb-8 space-y-4">
+            {notifications.map((notif, idx) => (
+              <div
+                key={idx}
+                className="p-5 bg-gradient-to-r from-violet-500/10 via-orange-500/5 to-amber-500/5 border border-violet-200 rounded-2xl shadow-sm text-right flex items-center justify-between gap-4 animate-pulse-subtle"
+              >
+                <div className="flex items-center gap-3.5 flex-row-reverse">
+                  <div className="bg-violet-600 text-white p-2.5 rounded-xl shrink-0 shadow-sm">
+                    <Bell className="h-5 w-5 animate-bounce-slow" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900 font-sans">تحديث حالة الطلب!</h4>
+                    <p className="text-[11px] text-slate-600 mt-1.5 leading-relaxed">
+                      عزيزنا <strong className="text-slate-900">{notif.clientName}</strong>، تم تحديث حالة طلبك ذو الرمز <strong className="text-violet-600 font-mono">#{notif.orderId}</strong> إلى <span className="font-extrabold text-violet-700 bg-violet-100/80 px-2 py-0.5 rounded-md inline-block">«{getStatusNameArabic(notif.newStatus)}»</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setNotifications((prev) => prev.filter((_, i) => i !== idx));
+                  }}
+                  className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition-colors shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Success Modal / Banner */}
         {orderSuccess && (
           <div className="mb-8 p-6 bg-emerald-50 border-r-4 border-emerald-500 rounded-xl shadow-sm text-right relative overflow-hidden">
@@ -694,7 +820,7 @@ ${productsText}
                 )}
 
                 {sortedOrdersToDisplay.map((order) => { return (
-                <div key={order.id} className="border border-slate-200 rounded-xl p-5 mb-5 hover:border-slate-300 bg-slate-50/50 transition-all text-right">
+                <div key={order.id} className={`rounded-xl p-5 mb-5 transition-all text-right border ${getOrderCardStyles(order.status)}`}>
                   <div className="flex justify-between items-start flex-wrap gap-3 pb-4 border-b border-slate-100">
                     <div>
                       <span className="text-[10px] font-bold text-slate-400 block leading-none">رقم الطلب</span>

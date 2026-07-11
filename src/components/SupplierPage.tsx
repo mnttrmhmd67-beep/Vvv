@@ -312,19 +312,6 @@ export default function SupplierPage({
             </div>
           ) : activeTab === "login" ? (
             <div className="space-y-6">
-              {/* List of active suppliers with login details */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-right text-xs text-slate-300 space-y-2.5 leading-relaxed font-semibold">
-                <span className="text-orange-500 font-black block">حسابات الموردين التجريبية النشطة:</span>
-                <div className="divide-y divide-slate-800/60 space-y-2 max-h-[140px] overflow-y-auto">
-                  {suppliers.filter(s => s.status === "active" || !s.status).map((sup) => (
-                    <div key={sup.id} className="pt-2 flex justify-between items-center text-[11px]">
-                      <span className="text-white font-bold">{sup.name}</span>
-                      <span>الهاتف: <strong className="text-white select-all">{sup.phone}</strong></span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               <form onSubmit={handleSupplierLogin} className="space-y-5 text-right">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 mb-1.5 font-sans">رقم هاتف المورد المسجل *</label>
