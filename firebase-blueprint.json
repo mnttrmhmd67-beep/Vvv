@@ -1,0 +1,138 @@
+{
+  "entities": {
+    "steelType": {
+      "title": "Steel Type",
+      "description": "Type of steel by country of origin or manufacturer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "product": {
+      "title": "Product",
+      "description": "Steel rebar product with diameter, price, and inventory quantity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "typeId": { "type": "string" },
+        "diameter": { "type": "string" },
+        "price": { "type": "number" },
+        "quantity": { "type": "number" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["id", "name", "typeId", "diameter", "price", "quantity"]
+    },
+    "supplier": {
+      "title": "Supplier",
+      "description": "A supplier company authorized to handle and deliver orders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "pin": { "type": "string" },
+        "managerName": { "type": "string" },
+        "governorate": { "type": "string" },
+        "address": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "active", "suspended"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "status"]
+    },
+    "customer": {
+      "title": "Customer",
+      "description": "An end customer registered in the platform",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "governorate": { "type": "string" },
+        "address": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "governorate", "status"]
+    },
+    "session": {
+      "title": "Session",
+      "description": "A login session for admins, suppliers, or customers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "supplier", "customer"] },
+        "userId": { "type": "string" },
+        "expiresAt": { "type": "string" },
+        "user": { "type": "object" }
+      },
+      "required": ["id", "role", "userId", "expiresAt"]
+    },
+    "order": {
+      "title": "Order",
+      "description": "An order submitted by a customer and assigned to a supplier",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "clientProvince": { "type": "string" },
+        "clientAddress": { "type": "string" },
+        "items": { "type": "array" },
+        "totalPrice": { "type": "number" },
+        "status": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "statusHistory": { "type": "array" }
+      },
+      "required": ["id", "clientName", "clientPhone", "clientAddress", "items", "totalPrice", "status"]
+    },
+    "notification": {
+      "title": "Notification",
+      "description": "An administrative notification about platform activities",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "type", "title", "message", "read", "createdAt"]
+    }
+  },
+  "firestore": {
+    "steelTypes": {
+      "schema": "steelType",
+      "description": "List of countries of origin for steel branding"
+    },
+    "products": {
+      "schema": "product",
+      "description": "Catalog of available steel products"
+    },
+    "suppliers": {
+      "schema": "supplier",
+      "description": "Registered and authorized suppliers"
+    },
+    "customers": {
+      "schema": "customer",
+      "description": "Registered and active customers"
+    },
+    "sessions": {
+      "schema": "session",
+      "description": "Active authentication session tokens"
+    },
+    "orders": {
+      "schema": "order",
+      "description": "Submitted steel purchase orders"
+    },
+    "notifications": {
+      "schema": "notification",
+      "description": "Admin notification history"
+    }
+  }
+}

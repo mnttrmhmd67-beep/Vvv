@@ -1,13 +1,20 @@
 import express from "express";
 import path from "path";
-import fs from "fs";
 import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const DB_DIR = path.join(process.cwd(), "data");
-const DB_FILE = path.join(DB_DIR, "db.json");
+import {
+  seedIfNeeded,
+  getFullDbState,
+  setDocument,
+  updateDocument,
+  deleteDocument,
+  getCustomerByPhone,
+  getSupplierByPhone,
+  cleanExpiredSessions,
+  cleanSupplierSessions,
+  readAllNotifications,
+  getAllDocs,
+  getDocById
+} from "./src/db-firestore.js";
 
 // ---------------------------------------------------------------------------
 // WhatsApp Business Cloud API Integration
@@ -64,143 +71,6 @@ async function sendWhatsAppNotification(text: string, toOverride?: string) {
 // Temporary in-memory store for OTPs (phone_number -> otp_code)
 const tempOtps = new Map<string, string>();
 
-// Define initial seed data
-const initialSteelTypes = [
-  { id: "st-1", name: "حديد تركي (إسكندرون)" },
-  { id: "st-2", name: "حديد عراقي (أربيل)" },
-  { id: "st-3", name: "حديد إماراتي (الإمارات)" },
-  { id: "st-4", name: "حديد سابك (السعودية)" }
-];
-
-const initialProducts = [
-  {
-    id: "p-1",
-    name: "شيش حديد تسليح قياس 12 ملم",
-    typeId: "st-1",
-    diameter: "12 ملم",
-    price: 950000,
-    quantity: 120,
-    imageUrl: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: "p-2",
-    name: "شيش حديد تسليح قياس 16 ملم",
-    typeId: "st-2",
-    diameter: "16 ملم",
-    price: 910000,
-    quantity: 85,
-    imageUrl: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: "p-3",
-    name: "شيش حديد تسليح قياس 10 ملم",
-    typeId: "st-3",
-    diameter: "10 ملم",
-    price: 980000,
-    quantity: 60,
-    imageUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: "p-4",
-    name: "حديد تسليح قياس 25 ملم ثقيل",
-    typeId: "st-1",
-    diameter: "25 ملم",
-    price: 960000,
-    quantity: 40,
-    imageUrl: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: "p-5",
-    name: "لفات سلك ربط حديد ناعم",
-    typeId: "st-2",
-    diameter: "1.5 ملم",
-    price: 1100000,
-    quantity: 15,
-    imageUrl: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=600&q=80"
-  }
-];
-
-const initialSuppliers = [
-  { id: "sup-1", name: "مذخر حديد الرافدين", phone: "07701111111", pin: "100020" },
-  { id: "sup-2", name: "شركة نينوى للتجهيزات الإنشائية", phone: "07702222222", pin: "100030" },
-  { id: "sup-3", name: "مورد حديد الفرات الأوسط", phone: "07703333333", pin: "100040" }
-];
-
-const initialOrders = [];
-
-// Helper to initialize and load the database
-function initDb() {
-  if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
-  }
-
-  const defaultDb = {
-    steelTypes: initialSteelTypes,
-    products: initialProducts,
-    suppliers: initialSuppliers.map(s => ({ ...s, status: "active" })),
-    orders: initialOrders,
-    customers: [],
-    sessions: [],
-    notifications: []
-  };
-
-  if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(defaultDb, null, 2), "utf-8");
-    return defaultDb;
-  }
-
-  try {
-    const raw = fs.readFileSync(DB_FILE, "utf-8");
-    const data = JSON.parse(raw);
-    let changed = false;
-    if (!data.customers) {
-      data.customers = [];
-      changed = true;
-    }
-    if (!data.orders) {
-      data.orders = [];
-      changed = true;
-    }
-    if (!data.sessions) {
-      data.sessions = [];
-      changed = true;
-    }
-    if (!data.notifications) {
-      data.notifications = [];
-      changed = true;
-    }
-    if (data.suppliers) {
-      data.suppliers.forEach((s: any) => {
-        if (!s.status) {
-          s.status = "active";
-          changed = true;
-        }
-      });
-    }
-    if (changed) {
-      fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
-    }
-    return data;
-  } catch (error) {
-    console.error("Error reading database file, resetting to defaults", error);
-    fs.writeFileSync(DB_FILE, JSON.stringify(defaultDb, null, 2), "utf-8");
-    return defaultDb;
-  }
-}
-
-// Get raw DB state
-function getDb() {
-  return initDb();
-}
-
-// Save DB state
-function saveDb(data: any) {
-  if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
-  }
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
-}
-
 const app = express();
 const PORT = 3000;
 
@@ -211,37 +81,37 @@ app.use((req, res, next) => {
   next();
 });
 
-// Init DB log
-initDb();
+// Initialize Firestore DB seeding asynchronously
+seedIfNeeded().then(() => {
+  console.log("🚀 Firestore DB initialization & seeding complete!");
+}).catch(err => {
+  console.error("❌ Firestore DB initialization failed:", err);
+});
 
   // ---------------------------------------------------------------------------
   // API Routes
   // ---------------------------------------------------------------------------
 
   // Get full database state
-  app.get("/api/data", (req, res) => {
+  app.get("/api/data", async (req, res) => {
     try {
-      const db = getDb();
-      res.json(db);
+      const dbState = await getFullDbState();
+      res.json(dbState);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
   // Create steel type
-  app.post("/api/steel-types", (req, res) => {
+  app.post("/api/steel-types", async (req, res) => {
     try {
       const { name } = req.body;
       if (!name) {
         return res.status(400).json({ error: "الاسم مطلوب" });
       }
-      const db = getDb();
-      const newType = {
-        id: "st-" + Date.now(),
-        name
-      };
-      db.steelTypes.push(newType);
-      saveDb(db);
+      const id = "st-" + Date.now();
+      const newType = { id, name };
+      await setDocument("steelTypes", id, newType);
       res.status(201).json(newType);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -249,37 +119,34 @@ initDb();
   });
 
   // Edit steel type
-  app.put("/api/steel-types/:id", (req, res) => {
+  app.put("/api/steel-types/:id", async (req, res) => {
     try {
       const { id } = req.params;
       const { name } = req.body;
       if (!name) {
         return res.status(400).json({ error: "الاسم مطلوب" });
       }
-      const db = getDb();
-      const index = db.steelTypes.findIndex((t: any) => t.id === id);
-      if (index === -1) {
+      const existing = await getDocById("steelTypes", id);
+      if (!existing) {
         return res.status(404).json({ error: "النوع غير موجود" });
       }
-      db.steelTypes[index].name = name;
-      saveDb(db);
-      res.json(db.steelTypes[index]);
+      const updated = { ...existing, name };
+      await setDocument("steelTypes", id, updated);
+      res.json(updated);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
   // Delete steel type
-  app.delete("/api/steel-types/:id", (req, res) => {
+  app.delete("/api/steel-types/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const db = getDb();
-      const index = db.steelTypes.findIndex((t: any) => t.id === id);
-      if (index === -1) {
+      const existing = await getDocById("steelTypes", id);
+      if (!existing) {
         return res.status(404).json({ error: "النوع غير موجود" });
       }
-      db.steelTypes.splice(index, 1);
-      saveDb(db);
+      await deleteDocument("steelTypes", id);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -287,15 +154,15 @@ initDb();
   });
 
   // Create product
-  app.post("/api/products", (req, res) => {
+  app.post("/api/products", async (req, res) => {
     try {
       const { name, typeId, diameter, price, quantity, imageUrl } = req.body;
       if (!name || !typeId || !diameter || price === undefined || quantity === undefined) {
         return res.status(400).json({ error: "جميع الحقول مطلوبة" });
       }
-      const db = getDb();
+      const id = "p-" + Date.now();
       const newProduct = {
-        id: "p-" + Date.now(),
+        id,
         name,
         typeId,
         diameter,
@@ -303,8 +170,7 @@ initDb();
         quantity: Number(quantity),
         imageUrl: imageUrl || "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80"
       };
-      db.products.push(newProduct);
-      saveDb(db);
+      await setDocument("products", id, newProduct);
       res.status(201).json(newProduct);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -312,44 +178,41 @@ initDb();
   });
 
   // Edit product
-  app.put("/api/products/:id", (req, res) => {
+  app.put("/api/products/:id", async (req, res) => {
     try {
       const { id } = req.params;
       const { name, typeId, diameter, price, quantity, imageUrl } = req.body;
-      const db = getDb();
-      const index = db.products.findIndex((p: any) => p.id === id);
-      if (index === -1) {
+      const existing = await getDocById("products", id);
+      if (!existing) {
         return res.status(404).json({ error: "المنتج غير موجود" });
       }
 
-      db.products[index] = {
-        ...db.products[index],
-        name: name !== undefined ? name : db.products[index].name,
-        typeId: typeId !== undefined ? typeId : db.products[index].typeId,
-        diameter: diameter !== undefined ? diameter : db.products[index].diameter,
-        price: price !== undefined ? Number(price) : db.products[index].price,
-        quantity: quantity !== undefined ? Number(quantity) : db.products[index].quantity,
-        imageUrl: imageUrl !== undefined ? imageUrl : db.products[index].imageUrl
+      const updated = {
+        ...existing,
+        name: name !== undefined ? name : existing.name,
+        typeId: typeId !== undefined ? typeId : existing.typeId,
+        diameter: diameter !== undefined ? diameter : existing.diameter,
+        price: price !== undefined ? Number(price) : existing.price,
+        quantity: quantity !== undefined ? Number(quantity) : existing.quantity,
+        imageUrl: imageUrl !== undefined ? imageUrl : existing.imageUrl
       };
 
-      saveDb(db);
-      res.json(db.products[index]);
+      await setDocument("products", id, updated);
+      res.json(updated);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
   // Delete product
-  app.delete("/api/products/:id", (req, res) => {
+  app.delete("/api/products/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const db = getDb();
-      const filtered = db.products.filter((p: any) => p.id !== id);
-      if (filtered.length === db.products.length) {
+      const existing = await getDocById("products", id);
+      if (!existing) {
         return res.status(404).json({ error: "المنتج غير موجود" });
       }
-      db.products = filtered;
-      saveDb(db);
+      await deleteDocument("products", id);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -359,13 +222,8 @@ initDb();
   // ---------------------------------------------------------------------------
   // Session Management Helper
   // ---------------------------------------------------------------------------
-  function createSession(role: string, phone: string, userId: string | null, user: any) {
-    const db = getDb();
-    db.sessions = db.sessions || [];
-    
-    // Clean up expired sessions
-    const now = Date.now();
-    db.sessions = db.sessions.filter((s: any) => new Date(s.expiresAt).getTime() > now);
+  async function createSession(role: string, phone: string, userId: string | null, user: any) {
+    await cleanExpiredSessions();
 
     const token = "sess_" + Math.random().toString(36).substring(2, 15) + "_" + Date.now();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours validity
@@ -379,8 +237,7 @@ initDb();
       expiresAt
     };
 
-    db.sessions.push(newSession);
-    saveDb(db);
+    await setDocument("sessions", token, newSession);
     return token;
   }
 
@@ -389,14 +246,13 @@ initDb();
   // ---------------------------------------------------------------------------
 
   // Check if a phone number is registered
-  app.post("/api/auth/check-phone", (req, res) => {
+  app.post("/api/auth/check-phone", async (req, res) => {
     try {
       const { phone } = req.body;
       if (!phone) {
         return res.status(400).json({ error: "رقم الهاتف مطلوب" });
       }
-      const db = getDb();
-      const customer = db.customers.find((c: any) => c && c.phone === phone);
+      const customer = await getCustomerByPhone(phone);
       if (customer && customer.status === "suspended") {
         return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
       }
@@ -414,8 +270,7 @@ initDb();
         return res.status(400).json({ error: "رقم الهاتف مطلوب" });
       }
 
-      const db = getDb();
-      const customer = db.customers.find((c: any) => c && c.phone === phone);
+      const customer = await getCustomerByPhone(phone);
       if (customer && customer.status === "suspended") {
         return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
       }
@@ -439,15 +294,14 @@ initDb();
   });
 
   // Verify OTP
-  app.post("/api/auth/verify-otp", (req, res) => {
+  app.post("/api/auth/verify-otp", async (req, res) => {
     try {
       const { phone, otp } = req.body;
       if (!phone || !otp) {
         return res.status(400).json({ error: "رقم الهاتف ورمز التحقق مطلوبان" });
       }
 
-      const db = getDb();
-      const customer = db.customers.find((c: any) => c && c.phone === phone);
+      const customer = await getCustomerByPhone(phone);
       if (customer && customer.status === "suspended") {
         return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
       }
@@ -459,7 +313,7 @@ initDb();
         
         let token = "";
         if (customer) {
-          token = createSession("customer", customer.phone, customer.id, customer);
+          token = await createSession("customer", customer.phone, customer.id, customer);
         }
         res.json({ success: true, token, customer });
       } else {
@@ -471,24 +325,23 @@ initDb();
   });
 
   // Register Customer
-  app.post("/api/auth/register", (req, res) => {
+  app.post("/api/auth/register", async (req, res) => {
     try {
       const { name, phone, governorate, address } = req.body;
       if (!name || !phone || !governorate) {
         return res.status(400).json({ error: "جميع الحقول الإلزامية مطلوبة (الاسم، الهاتف، المحافظة)" });
       }
 
-      const db = getDb();
-      
       // Ensure phone is unique across all customers AND suppliers
-      const existingCust = db.customers.find((c: any) => c && typeof c.phone === "string" && c.phone.trim() === phone.trim());
-      const existingSup = db.suppliers.find((s: any) => s && typeof s.phone === "string" && s.phone.trim() === phone.trim());
+      const existingCust = await getCustomerByPhone(phone);
+      const existingSup = await getSupplierByPhone(phone);
       if (existingCust || existingSup) {
         return res.status(400).json({ error: "رقم الهاتف هذا مسجل بالفعل في منصة أساس بـ حساب آخر" });
       }
 
+      const id = "cust-" + Date.now();
       const newCustomer = {
-        id: "cust-" + Date.now(),
+        id,
         name,
         phone,
         governorate,
@@ -497,21 +350,20 @@ initDb();
         status: "active" as const
       };
 
-      db.customers.push(newCustomer);
+      await setDocument("customers", id, newCustomer);
       
       // Create admin notification
-      db.notifications = db.notifications || [];
+      const notifId = "notif-" + Date.now() + "-cust";
       const messageText = `🆕 تم إنشاء حساب عميل جديد\nالاسم: ${name}\nالهاتف: ${phone}`;
-      db.notifications.push({
-        id: "notif-" + Date.now() + "-cust",
+      const newNotification = {
+        id: notifId,
         type: "customer_registered",
         title: "🆕 حساب عميل جديد",
         message: messageText,
         createdAt: new Date().toISOString(),
         read: false
-      });
-      
-      saveDb(db);
+      };
+      await setDocument("notifications", notifId, newNotification);
 
       // Trigger background WhatsApp if configured
       try {
@@ -520,7 +372,7 @@ initDb();
         console.error("WhatsApp error:", err);
       }
 
-      const token = createSession("customer", newCustomer.phone, newCustomer.id, newCustomer);
+      const token = await createSession("customer", newCustomer.phone, newCustomer.id, newCustomer);
 
       res.status(201).json({ success: true, token, customer: newCustomer });
     } catch (e: any) {
@@ -529,24 +381,23 @@ initDb();
   });
 
   // Register Supplier (Self-Registration)
-  app.post("/api/auth/supplier-register", (req, res) => {
+  app.post("/api/auth/supplier-register", async (req, res) => {
     try {
       const { name, managerName, phone, governorate, address } = req.body;
       if (!name || !managerName || !phone || !governorate) {
         return res.status(400).json({ error: "جميع الحقول الإلزامية مطلوبة (اسم الشركة، اسم المسؤول، رقم الهاتف، المحافظة)" });
       }
 
-      const db = getDb();
-
       // Ensure phone is unique across all customers AND suppliers
-      const existingCust = db.customers.find((c: any) => c && typeof c.phone === "string" && c.phone.trim() === phone.trim());
-      const existingSup = db.suppliers.find((s: any) => s && typeof s.phone === "string" && s.phone.trim() === phone.trim());
+      const existingCust = await getCustomerByPhone(phone);
+      const existingSup = await getSupplierByPhone(phone);
       if (existingCust || existingSup) {
         return res.status(400).json({ error: "رقم الهاتف هذا مسجل بالفعل في منصة أساس بـ حساب آخر" });
       }
 
+      const id = "sup-" + Date.now();
       const newSupplier = {
-        id: "sup-" + Date.now(),
+        id,
         name,
         managerName,
         phone,
@@ -556,21 +407,20 @@ initDb();
         status: "pending" as const // Always defaults to pending
       };
 
-      db.suppliers.push(newSupplier);
+      await setDocument("suppliers", id, newSupplier);
 
       // Create admin notification
-      db.notifications = db.notifications || [];
+      const notifId = "notif-" + Date.now() + "-sup";
       const messageText = `🆕 تم تسجيل مورد جديد (بانتظار الموافقة)\nالشركة: ${name}\nالمسؤول: ${managerName}\nالهاتف: ${phone}\nالمحافظة: ${governorate}`;
-      db.notifications.push({
-        id: "notif-" + Date.now() + "-sup",
+      const newNotification = {
+        id: notifId,
         type: "supplier_registered",
         title: "🆕 طلب تسجيل مورد جديد",
         message: messageText,
         createdAt: new Date().toISOString(),
         read: false
-      });
-
-      saveDb(db);
+      };
+      await setDocument("notifications", notifId, newNotification);
 
       // Trigger background WhatsApp if configured
       try {
@@ -586,15 +436,15 @@ initDb();
   });
 
   // Admin Login Verification
-  app.post("/api/auth/admin-login", (req, res) => {
+  app.post("/api/auth/admin-login", async (req, res) => {
     try {
       const { phone, pin } = req.body;
       const ADMIN_PHONE = process.env.ADMIN_PHONE || "07732670436";
       const ADMIN_PIN = process.env.ADMIN_PIN || "200011";
-
+ 
       if (phone && pin && phone.trim() === ADMIN_PHONE && pin.trim() === ADMIN_PIN) {
         const adminUser = { name: "المدير العام", phone: ADMIN_PHONE };
-        const token = createSession("admin", ADMIN_PHONE, "admin", adminUser);
+        const token = await createSession("admin", ADMIN_PHONE, "admin", adminUser);
         res.json({ success: true, token, user: adminUser });
       } else {
         res.status(401).json({ error: "رقم الهاتف أو رمز الدخول السري غير صحيح" });
@@ -603,19 +453,16 @@ initDb();
       res.status(500).json({ error: e.message });
     }
   });
-
+ 
   // Supplier Login Verification
-  app.post("/api/auth/supplier-login", (req, res) => {
+  app.post("/api/auth/supplier-login", async (req, res) => {
     try {
       const { phone } = req.body;
       if (!phone) {
         return res.status(400).json({ error: "رقم الهاتف مطلوب" });
       }
-      const db = getDb();
-      const supplier = db.suppliers.find(
-        (s: any) => s && typeof s.phone === "string" && s.phone.trim() === phone.trim()
-      );
-
+      const supplier = await getSupplierByPhone(phone);
+ 
       if (supplier) {
         // Enforce status checks
         const status = supplier.status || "active";
@@ -625,8 +472,8 @@ initDb();
         if (status === "suspended") {
           return res.status(403).json({ error: "عذراً، تم إيقاف حساب المورد هذا مؤقتاً. يرجى التواصل مع الإدارة." });
         }
-
-        const token = createSession("supplier", supplier.phone, supplier.id, supplier);
+ 
+        const token = await createSession("supplier", supplier.phone, supplier.id, supplier);
         res.json({ success: true, token, user: supplier });
       } else {
         res.status(401).json({ error: "رقم الهاتف المدخل غير مسجل كمورد في المنصة" });
@@ -635,54 +482,49 @@ initDb();
       res.status(500).json({ error: e.message });
     }
   });
-
+ 
   // Verify Session Token
-  app.post("/api/auth/verify-session", (req, res) => {
+  app.post("/api/auth/verify-session", async (req, res) => {
     try {
       const { token } = req.body;
       if (!token) {
         return res.status(400).json({ error: "Session token is required" });
       }
-
-      const db = getDb();
-      db.sessions = db.sessions || [];
-      const session = db.sessions.find((s: any) => s && s.id === token);
-
+ 
+      const session = await getDocById("sessions", token);
+ 
       if (!session) {
         return res.status(401).json({ error: "Invalid session token" });
       }
-
+ 
       const now = Date.now();
       if (new Date(session.expiresAt).getTime() < now) {
         // Expired
-        db.sessions = db.sessions.filter((s: any) => s && s.id !== token);
-        saveDb(db);
+        await deleteDocument("sessions", token);
         return res.status(401).json({ error: "Session token expired" });
       }
-
+ 
       // Check if user is suspended (if customer)
       if (session.role === "customer") {
-        const customer = db.customers.find((c: any) => c && c.id === session.userId);
+        const customer = await getDocById("customers", session.userId);
         if (customer && customer.status === "suspended") {
-          db.sessions = db.sessions.filter((s: any) => s && s.id !== token);
-          saveDb(db);
+          await deleteDocument("sessions", token);
           return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
         }
         if (customer) {
           // Update user details in session in case of name change etc.
           session.user = customer;
-          saveDb(db);
+          await setDocument("sessions", token, session);
         }
       }
-
+ 
       // Check if supplier is active
       if (session.role === "supplier") {
-        const supplier = db.suppliers.find((s: any) => s && s.id === session.userId);
+        const supplier = await getDocById("suppliers", session.userId);
         if (supplier) {
           const status = supplier.status || "active";
           if (status !== "active") {
-            db.sessions = db.sessions.filter((s: any) => s.id !== token);
-            saveDb(db);
+            await deleteDocument("sessions", token);
             return res.status(403).json({
               error: status === "pending"
                 ? "عذراً، حساب المورد الخاص بك بانتظار موافقة الإدارة."
@@ -690,25 +532,22 @@ initDb();
             });
           }
           session.user = supplier;
-          saveDb(db);
+          await setDocument("sessions", token, session);
         }
       }
-
+ 
       res.json({ success: true, role: session.role, user: session.user });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
-
+ 
   // Logout
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/auth/logout", async (req, res) => {
     try {
       const { token } = req.body;
       if (token) {
-        const db = getDb();
-        db.sessions = db.sessions || [];
-        db.sessions = db.sessions.filter((s: any) => s.id !== token);
-        saveDb(db);
+        await deleteDocument("sessions", token);
       }
       res.json({ success: true });
     } catch (e: any) {
@@ -717,37 +556,36 @@ initDb();
   });
 
   // Update Customer Profile
-  app.put("/api/customers/:id", (req, res) => {
+  app.put("/api/customers/:id", async (req, res) => {
     try {
       const { id } = req.params;
       const { name, governorate, address } = req.body;
-      const db = getDb();
-      const index = db.customers.findIndex((c: any) => c.id === id);
+      const customer = await getDocById("customers", id);
 
-      if (index === -1) {
+      if (!customer) {
         return res.status(404).json({ error: "حساب العميل غير موجود" });
       }
 
-      if (db.customers[index].status === "suspended") {
+      if (customer.status === "suspended") {
         return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
       }
 
-      db.customers[index] = {
-        ...db.customers[index],
-        name: name || db.customers[index].name,
-        governorate: governorate || db.customers[index].governorate,
-        address: address !== undefined ? address : db.customers[index].address
+      const updated = {
+        ...customer,
+        name: name || customer.name,
+        governorate: governorate || customer.governorate,
+        address: address !== undefined ? address : customer.address
       };
 
-      saveDb(db);
-      res.json({ success: true, customer: db.customers[index] });
+      await setDocument("customers", id, updated);
+      res.json({ success: true, customer: updated });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
   // Update Customer Account Status (active/suspended)
-  app.put("/api/customers/:id/status", (req, res) => {
+  app.put("/api/customers/:id/status", async (req, res) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
@@ -755,23 +593,22 @@ initDb();
         return res.status(400).json({ error: "الحالة المطلوبة غير صالحة" });
       }
 
-      const db = getDb();
-      const index = db.customers.findIndex((c: any) => c.id === id);
+      const customer = await getDocById("customers", id);
 
-      if (index === -1) {
+      if (!customer) {
         return res.status(404).json({ error: "حساب العميل غير موجود" });
       }
 
-      db.customers[index].status = status;
-      saveDb(db);
-      res.json({ success: true, customer: db.customers[index] });
+      customer.status = status;
+      await setDocument("customers", id, customer);
+      res.json({ success: true, customer });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
   // Update Supplier Account Status (pending/active/suspended)
-  app.put("/api/suppliers/:id/status", (req, res) => {
+  app.put("/api/suppliers/:id/status", async (req, res) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
@@ -779,35 +616,30 @@ initDb();
         return res.status(400).json({ error: "الحالة المطلوبة غير صالحة" });
       }
 
-      const db = getDb();
-      const index = db.suppliers.findIndex((s: any) => s.id === id);
+      const supplier = await getDocById("suppliers", id);
 
-      if (index === -1) {
+      if (!supplier) {
         return res.status(404).json({ error: "المورد غير موجود" });
       }
 
-      db.suppliers[index].status = status;
+      supplier.status = status;
+      await setDocument("suppliers", id, supplier);
       
       // If suspended, also clean their active session
       if (status !== "active") {
-        db.sessions = db.sessions || [];
-        db.sessions = db.sessions.filter((s: any) => !(s.role === "supplier" && s.userId === id));
+        await cleanSupplierSessions(id);
       }
 
-      saveDb(db);
-      res.json({ success: true, supplier: db.suppliers[index] });
+      res.json({ success: true, supplier });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
   // Read all admin notifications
-  app.post("/api/notifications/read-all", (req, res) => {
+  app.post("/api/notifications/read-all", async (req, res) => {
     try {
-      const db = getDb();
-      db.notifications = db.notifications || [];
-      db.notifications.forEach((n: any) => n.read = true);
-      saveDb(db);
+      await readAllNotifications();
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -815,27 +647,26 @@ initDb();
   });
 
   // Create order
-  app.post("/api/orders", (req, res) => {
+  app.post("/api/orders", async (req, res) => {
     try {
       const { clientName, clientPhone, clientAddress, clientProvince, customerId, items } = req.body;
       if (!clientName || !clientPhone || !clientAddress || !items || !items.length) {
         return res.status(400).json({ error: "جميع معلومات العميل ومحتويات السلة مطلوبة" });
       }
 
-      const db = getDb();
-      
       // Verify if customer is suspended
-      const existingCustomer = db.customers.find((c: any) => c && c.phone === clientPhone);
+      const existingCustomer = await getCustomerByPhone(clientPhone);
       if (existingCustomer && existingCustomer.status === "suspended") {
         return res.status(403).json({ error: "تم إيقاف حسابك مؤقتًا، يرجى التواصل مع إدارة منصة أساس." });
       }
 
       let total = 0;
       const processedItems = [];
+      const steelTypes = await getAllDocs("steelTypes");
 
       // Validate products and stock
       for (const item of items) {
-        const prod = db.products.find((p: any) => p && p.id === item.productId);
+        const prod = await getDocById("products", item.productId);
         if (!prod) {
           return res.status(400).json({ error: `المنتج ذو الرمز ${item.productId} غير متوفر` });
         }
@@ -845,8 +676,9 @@ initDb();
 
         // Deduct quantity immediately
         prod.quantity -= item.quantity;
+        await setDocument("products", prod.id, prod);
 
-        const steelType = db.steelTypes.find((t: any) => t && t.id === prod.typeId);
+        const steelType = steelTypes.find((t: any) => t && t.id === prod.typeId);
         const typeName = steelType ? steelType.name : "حديد عام";
 
         processedItems.push({
@@ -870,8 +702,9 @@ initDb();
         if (!finalClientProvince) finalClientProvince = existingCustomer.governorate;
       }
 
+      const orderId = "order-" + Math.floor(100000 + Math.random() * 900000); // Nice 6 digit code
       const newOrder = {
-        id: "order-" + Math.floor(100000 + Math.random() * 900000), // Nice 6 digit code
+        id: orderId,
         customerId: finalCustomerId,
         clientName,
         clientPhone,
@@ -891,8 +724,7 @@ initDb();
         ]
       };
 
-      db.orders.push(newOrder);
-      saveDb(db);
+      await setDocument("orders", orderId, newOrder);
 
       // Send WhatsApp Notification for New Order
       try {
@@ -918,18 +750,16 @@ initDb();
   });
 
   // Update order status/assignment
-  app.put("/api/orders/:id/status", (req, res) => {
+  app.put("/api/orders/:id/status", async (req, res) => {
     try {
       const { id } = req.params;
       const { status, supplierId, note } = req.body;
-      const db = getDb();
-      const orderIndex = db.orders.findIndex((o: any) => o.id === id);
+      const order = await getDocById("orders", id);
 
-      if (orderIndex === -1) {
+      if (!order) {
         return res.status(404).json({ error: "الطلب غير موجود" });
       }
 
-      const order = db.orders[orderIndex];
       const oldStatus = order.status;
       const oldSupplierId = order.supplierId;
 
@@ -940,6 +770,7 @@ initDb();
         order.supplierId = supplierId;
       }
 
+      order.statusHistory = order.statusHistory || [];
       order.statusHistory.push({
         status: order.status,
         updatedAt: new Date().toISOString(),
@@ -947,17 +778,17 @@ initDb();
       });
 
       // If order is rejected, return the stock
-      if (status === "rejected") {
+      if (status === "rejected" && oldStatus !== "rejected") {
         for (const item of order.items) {
-          const prod = db.products.find((p: any) => p && p.id === item.productId);
+          const prod = await getDocById("products", item.productId);
           if (prod) {
-            prod.quantity += item.quantity;
+            prod.quantity = (prod.quantity || 0) + item.quantity;
+            await setDocument("products", prod.id, prod);
           }
         }
       }
 
-      db.orders[orderIndex] = order;
-      saveDb(db);
+      await setDocument("orders", id, order);
 
       // Send WhatsApp Notification for updates
       try {
@@ -977,7 +808,7 @@ initDb();
           (order.supplierId && oldSupplierId !== order.supplierId)
         ) {
           // 3. Assigned to supplier
-          const supplierObj = db.suppliers.find((s: any) => s && s.id === order.supplierId);
+          const supplierObj = await getDocById("suppliers", order.supplierId);
           const supplierName = supplierObj ? supplierObj.name : "غير محدد";
           waText = `🚚 تحويل طلب إلى المورد في منصة أساس\n` +
             `رقم الطلب: #${order.id}\n` +
@@ -1026,21 +857,22 @@ initDb();
   });
 
   // Manage suppliers (add supplier)
-  app.post("/api/suppliers", (req, res) => {
+  app.post("/api/suppliers", async (req, res) => {
     try {
       const { name, phone, pin } = req.body;
       if (!name || !phone || !pin) {
         return res.status(400).json({ error: "الاسم ورقم الهاتف والرمز السري مطلوبة" });
       }
-      const db = getDb();
+      const id = "sup-" + Date.now();
       const newSup = {
-        id: "sup-" + Date.now(),
+        id,
         name,
         phone,
-        pin
+        pin,
+        status: "active" as const,
+        createdAt: new Date().toISOString()
       };
-      db.suppliers.push(newSup);
-      saveDb(db);
+      await setDocument("suppliers", id, newSup);
       res.status(201).json(newSup);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
