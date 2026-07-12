@@ -539,6 +539,33 @@ export async function updateSupplierStatus(
   return res.supplier;
 }
 
+export async function updateSupplier(
+  id: string,
+  supplierData: Partial<Supplier>
+): Promise<Supplier> {
+  try {
+    const response = await fetch(`${API_BASE}/suppliers/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(supplierData)
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || "خطأ في تحديث بيانات المورد");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("API Error updating supplier, executing locally:", error);
+    const backup = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const db = backup ? JSON.parse(backup) : { suppliers: [] };
+    const index = db.suppliers.findIndex((s: any) => s.id === id);
+    if (index === -1) throw new Error("المورد غير موجود");
+    db.suppliers[index] = { ...db.suppliers[index], ...supplierData };
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(db));
+    return db.suppliers[index];
+  }
+}
+
 export async function readAllNotifications(): Promise<{ success: boolean }> {
   const response = await fetch(`${API_BASE}/notifications/read-all`, {
     method: "POST",

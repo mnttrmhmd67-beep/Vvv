@@ -24,6 +24,7 @@ import {
   addSupplier,
   updateCustomerStatus,
   updateSupplierStatus,
+  updateSupplier,
   readAllNotifications,
   verifySession,
   logoutSession
@@ -362,6 +363,12 @@ export default function App() {
     return updated;
   };
 
+  const handleUpdateSupplierAction = async (id: string, supplierData: Partial<Supplier>) => {
+    const updated = await updateSupplier(id, supplierData);
+    setSuppliers((prev) => prev.map((s) => (s.id === id ? updated : s)));
+    return updated;
+  };
+
   const handleReadAllNotificationsAction = async () => {
     await readAllNotifications();
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
@@ -442,6 +449,7 @@ export default function App() {
                 onAddSupplier={handleAddSupplierAction}
                 onUpdateCustomerStatus={handleUpdateCustomerStatusAction}
                 onUpdateSupplierStatus={handleUpdateSupplierStatusAction}
+                onUpdateSupplier={handleUpdateSupplierAction}
                 onReadAllNotifications={handleReadAllNotificationsAction}
                 isLoggedIn={isAdminLoggedIn}
                 onLoginSuccess={handleAdminLoginSuccess}

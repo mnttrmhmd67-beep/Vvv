@@ -28,6 +28,11 @@ export interface Supplier {
   address?: string;
   status?: "pending" | "active" | "suspended";
   createdAt?: string;
+  email?: string;
+  governorates?: string[];
+  prices?: Record<string, number>;
+  quantities?: Record<string, number>;
+  internalNotes?: string;
 }
 
 export interface AdminNotification {

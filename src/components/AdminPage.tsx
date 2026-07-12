@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { Product, SteelType, Order, Supplier, OrderStatus, Customer, AdminNotification } from "../types";
-import { Shield, Lock, Phone, Database, TrendingUp, Plus, Edit2, Trash2, Check, X, ArrowLeft, ArrowUpRight, ClipboardList, Tag, Image, Compass, HelpCircle, Truck, Users, Ban, UserCheck, Search, Eye, Calendar, LogOut, CheckSquare, MessageSquare } from "lucide-react";
+import { Shield, Lock, Phone, Database, TrendingUp, Plus, Edit2, Trash2, Check, X, ArrowLeft, ArrowUpRight, ClipboardList, Tag, Image, Compass, HelpCircle, Truck, Users, Ban, UserCheck, Search, Eye, Calendar, LogOut, CheckSquare, MessageSquare, AlertCircle } from "lucide-react";
 import { adminLogin } from "../services/api";
 
 interface AdminPageProps {
@@ -25,6 +25,7 @@ interface AdminPageProps {
   onAddSupplier: (sup: { name: string; phone: string; pin: string }) => Promise<any>;
   onUpdateCustomerStatus: (id: string, status: "active" | "suspended") => Promise<any>;
   onUpdateSupplierStatus?: (id: string, status: "pending" | "active" | "suspended") => Promise<any>;
+  onUpdateSupplier?: (id: string, supplierData: Partial<Supplier>) => Promise<any>;
   onReadAllNotifications?: () => Promise<any>;
   isLoggedIn?: boolean;
   onLoginSuccess?: (token: string, user: any) => void;
@@ -48,6 +49,7 @@ export default function AdminPage({
   onAddSupplier,
   onUpdateCustomerStatus,
   onUpdateSupplierStatus,
+  onUpdateSupplier,
   onReadAllNotifications,
   isLoggedIn = false,
   onLoginSuccess,
@@ -86,6 +88,73 @@ export default function AdminPage({
   const [newSupName, setNewSupName] = useState("");
   const [newSupPhone, setNewSupPhone] = useState("");
   const [newSupPin, setNewSupPin] = useState("");
+
+  // Supplier Sheet Editing State
+  const [selectedEditSupplier, setSelectedEditSupplier] = useState<Supplier | null>(null);
+  const [editSupName, setEditSupName] = useState("");
+  const [editSupPhone, setEditSupPhone] = useState("");
+  const [editSupPin, setEditSupPin] = useState("");
+  const [editSupEmail, setEditSupEmail] = useState("");
+  const [editSupManagerName, setEditSupManagerName] = useState("");
+  const [editSupAddress, setEditSupAddress] = useState("");
+  const [editSupGovernorates, setEditSupGovernorates] = useState<string[]>([]);
+  const [editSupPrices, setEditSupPrices] = useState<Record<string, number>>({});
+  const [editSupQuantities, setEditSupQuantities] = useState<Record<string, number>>({});
+  const [editSupInternalNotes, setEditSupInternalNotes] = useState("");
+  const [editSupStatus, setEditSupStatus] = useState<"pending" | "active" | "suspended">("active");
+  const [isSavingSupplier, setIsSavingSupplier] = useState(false);
+
+  const IRAQI_GOVERNORATES = [
+    "بغداد", "البصرة", "نينوى", "أربيل", "السليمانية", "دهوك", "كركوك", "بابل", 
+    "كربلاء", "النجف", "الأنبار", "ذي قار", "ميسان", "المثنى", "القادسية", "واسط", 
+    "صلاح الدين", "ديالى"
+  ];
+
+  const handleOpenSupplierSheet = (sup: Supplier) => {
+    setSelectedEditSupplier(sup);
+    setEditSupName(sup.name || "");
+    setEditSupPhone(sup.phone || "");
+    setEditSupPin(sup.pin || "");
+    setEditSupEmail(sup.email || "");
+    setEditSupManagerName(sup.managerName || "");
+    setEditSupAddress(sup.address || "");
+    setEditSupGovernorates(sup.governorates || []);
+    setEditSupPrices(sup.prices || {});
+    setEditSupQuantities(sup.quantities || {});
+    setEditSupInternalNotes(sup.internalNotes || "");
+    setEditSupStatus(sup.status || "active");
+  };
+
+  const handleSaveSupplierSheet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEditSupplier) return;
+    setIsSavingSupplier(true);
+    try {
+      if (onUpdateSupplier) {
+        await onUpdateSupplier(selectedEditSupplier.id, {
+          name: editSupName,
+          phone: editSupPhone,
+          pin: editSupPin,
+          email: editSupEmail,
+          managerName: editSupManagerName,
+          address: editSupAddress,
+          governorates: editSupGovernorates,
+          prices: editSupPrices,
+          quantities: editSupQuantities,
+          internalNotes: editSupInternalNotes,
+          status: editSupStatus
+        });
+        alert("تم حفظ بيانات المورد بنجاح وتحديث السجل الخاص به!");
+        setSelectedEditSupplier(null);
+      } else {
+        alert("خطأ: تعذر الوصول إلى دالة التحديث.");
+      }
+    } catch (err: any) {
+      alert("خطأ أثناء حفظ البيانات: " + err.message);
+    } finally {
+      setIsSavingSupplier(false);
+    }
+  };
 
   // Customers tab state
   const [customerSearch, setCustomerSearch] = useState("");
@@ -1131,43 +1200,54 @@ export default function AdminPage({
                         <span className="text-orange-600">قيد التجهيز: <strong className="text-orange-700 text-xs font-black">{activeCount}</strong></span>
                       </div>
 
-                      {onUpdateSupplierStatus && (
-                        <div className="pt-2.5 flex justify-end">
-                          {isSuspended ? (
-                            <button
-                              onClick={async () => {
-                                if (confirm(`هل أنت متأكد من إعادة تفعيل حساب المورد (${sup.name})؟`)) {
-                                  try {
-                                    await onUpdateSupplierStatus(sup.id, "active");
-                                    alert("تمت إعادة تفعيل حساب المورد بنجاح.");
-                                  } catch (err: any) {
-                                    alert(err.message);
+                      <div className="pt-2.5 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenSupplierSheet(sup)}
+                          className="flex-1 bg-slate-900 hover:bg-orange-600 hover:text-slate-950 text-white font-extrabold py-1.5 rounded-lg text-[10px] transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                          <span>الملف الاحترافي والأسعار</span>
+                        </button>
+
+                        {onUpdateSupplierStatus && (
+                          <div className="flex-1">
+                            {isSuspended ? (
+                              <button
+                                onClick={async () => {
+                                  if (confirm(`هل أنت متأكد من إعادة تفعيل حساب المورد (${sup.name})؟`)) {
+                                    try {
+                                      await onUpdateSupplierStatus(sup.id, "active");
+                                      alert("تمت إعادة تفعيل حساب المورد بنجاح.");
+                                    } catch (err: any) {
+                                      alert(err.message);
+                                    }
                                   }
-                                }
-                              }}
-                              className="w-full bg-slate-900 hover:bg-emerald-600 hover:text-white text-white font-bold py-1.5 rounded-lg text-[10px] transition-all cursor-pointer text-center"
-                            >
-                              إعادة تفعيل الحساب
-                            </button>
-                          ) : (
-                            <button
-                              onClick={async () => {
-                                if (confirm(`هل أنت متأكد من إيقاف حساب المورد (${sup.name}) مؤقتاً؟ لن يستطيع تسجيل الدخول أو استلام الطلبات.`)) {
-                                  try {
-                                    await onUpdateSupplierStatus(sup.id, "suspended");
-                                    alert("تم إيقاف حساب المورد بنجاح.");
-                                  } catch (err: any) {
-                                    alert(err.message);
+                                }}
+                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded-lg text-[10px] transition-all cursor-pointer text-center"
+                              >
+                                تفعيل الحساب
+                              </button>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  if (confirm(`هل أنت متأكد من إيقاف حساب المورد (${sup.name}) مؤقتاً؟ لن يستطيع تسجيل الدخول أو استلام الطلبات.`)) {
+                                    try {
+                                      await onUpdateSupplierStatus(sup.id, "suspended");
+                                      alert("تم إيقاف حساب المورد بنجاح.");
+                                    } catch (err: any) {
+                                      alert(err.message);
+                                    }
                                   }
-                                }
-                              }}
-                              className="w-full bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-700 font-bold py-1.5 rounded-lg text-[10px] transition-all cursor-pointer text-center"
-                            >
-                              إيقاف حساب المورد مؤقتاً
-                            </button>
-                          )}
-                        </div>
-                      )}
+                                }}
+                                className="w-full bg-slate-150 hover:bg-red-50 hover:text-red-600 text-slate-700 font-bold py-1.5 rounded-lg text-[10px] transition-all cursor-pointer text-center"
+                              >
+                                إيقاف الحساب
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -1489,70 +1569,441 @@ export default function AdminPage({
       )}
 
       {/* MODAL 2: Route / Assign Order to Supplier Dialog */}
-      {routingOrderId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl border border-slate-200 w-full max-w-md p-6 text-right relative shadow-2xl">
-            <h3 className="text-base font-black text-slate-950 mb-1 font-sans flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-orange-500" />
-              <span>موافقة وتوجيه الحمولة لمورد الحديد</span>
-            </h3>
-            <p className="text-slate-500 text-xs mb-5">
-              حدد المورد أو المذخر المعتمد المناسب ليتكلف بتجهيز طلب الحديد رقم #{routingOrderId} وشحنه لموقع العمل للعميل.
-            </p>
+      {routingOrderId && (() => {
+        const order = orders.find((o) => o.id === routingOrderId);
+        if (!order) return null;
 
-            {suppliers.length === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-xs text-red-500 font-bold mb-4">يرجى تسجيل مورد معتمد أولاً في علامة التبويب "توثيق الموردين" قبل توجيه الطلب.</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoutingOrderId(null);
-                    setActiveTab("suppliers");
-                  }}
-                  className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold"
-                >
-                  تسجيل مورد جديد
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleRouteOrder} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5">اختر المورد المسؤول عن هذا التجهيز *</label>
-                  <select
-                    value={selectedSupplierId}
-                    required
-                    onChange={(e) => setSelectedSupplierId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black focus:outline-none focus:ring-2 focus:ring-orange-500 text-right"
-                  >
-                    <option value="" disabled>-- اختر المورد التجهيزي --</option>
-                    {suppliers.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.phone})
-                      </option>
-                    ))}
-                  </select>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+            <div className="bg-white rounded-3xl border border-slate-200 w-full max-w-4xl p-6 text-right relative shadow-2xl my-8">
+              <button 
+                onClick={() => {
+                  setRoutingOrderId(null);
+                  setSelectedSupplierId("");
+                }}
+                className="absolute left-4 top-4 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <h3 className="text-lg font-black text-slate-950 mb-1 font-sans flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-orange-500" />
+                <span>مقارنة وتوجيه الحمولة لمورد الحديد الأنسب</span>
+              </h3>
+              <p className="text-slate-500 text-xs mb-5 font-medium">
+                تتبع نظام المقارنة الآلي لأسعار الموردين والكميات المتوفرة ومحافظات التغطية لتكليف المورد الأفضل لطلب العميل رقم #{routingOrderId}.
+              </p>
+
+              {/* Order quick overview */}
+              <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 mb-6 text-right space-y-3">
+                <div className="flex flex-wrap justify-between items-center text-xs text-slate-600 gap-3">
+                  <div><span className="font-bold text-slate-400">العميل:</span> <strong className="font-extrabold text-slate-800">{order.clientName}</strong></div>
+                  <div><span className="font-bold text-slate-400">رقم الهاتف:</span> <strong className="font-bold text-slate-800">{order.clientPhone}</strong></div>
+                  <div><span className="font-bold text-slate-400">المحافظة المطلوبة:</span> <span className="bg-orange-100 text-orange-800 px-2 py-0.5 rounded-md font-black text-[10px]">{order.clientProvince || "بغداد"}</span></div>
                 </div>
+                <div className="border-t border-slate-200/60 pt-2.5">
+                  <span className="text-[10px] font-black text-slate-400 block mb-1">المواد المطلوبة في الطلب:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {order.items.map((item, idx) => (
+                      <span key={idx} className="bg-white border border-slate-200 text-slate-800 px-2.5 py-1 rounded-lg text-xs font-bold">
+                        {item.name} ({item.diameter}) × {item.quantity} طن
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
 
-                <div className="flex gap-2 pt-4 border-t border-slate-100">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-xs transition-all"
-                  >
-                    اعتماد الموافقة وتكليف المورد بالشحن
-                  </button>
+              {suppliers.filter(s => s.status === "active").length === 0 ? (
+                <div className="text-center py-10">
+                  <p className="text-sm text-red-500 font-bold mb-4">يرجى تنشيط وتسجيل مورد معتمد أولاً في علامة التبويب "توثيق الموردين" قبل توجيه الطلب.</p>
                   <button
                     type="button"
                     onClick={() => {
                       setRoutingOrderId(null);
-                      setSelectedSupplierId("");
+                      setActiveTab("suppliers");
                     }}
-                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+                    className="bg-slate-900 hover:bg-orange-600 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs transition-all cursor-pointer"
                   >
-                    إلغاء
+                    عرض صفحة الموردين
                   </button>
                 </div>
-              </form>
-            )}
+              ) : (
+                <div className="space-y-4">
+                  <h4 className="font-black text-xs text-slate-700 pr-1">جدول المقارنة الفورية وتحليل الموردين:</h4>
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                    <table className="w-full text-right text-xs text-slate-700">
+                      <thead className="bg-slate-50">
+                        <tr className="border-b border-slate-200">
+                          <th className="p-3 font-black text-slate-600">المورد / الشركة</th>
+                          <th className="p-3 font-black text-slate-600 text-center">التغطية الجغرافية</th>
+                          <th className="p-3 font-black text-slate-600 text-center">تحليل الكميات المتوفرة</th>
+                          <th className="p-3 font-black text-slate-600 text-left">التكلفة الإجمالية (سعر المورد)</th>
+                          <th className="p-3 font-black text-slate-600 text-left">الإجراء</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {suppliers.filter(s => s.status === "active").map((sup) => {
+                          // Check province coverage
+                          const orderProvince = order.clientProvince || "بغداد";
+                          const coversProvince = sup.governorates?.includes(orderProvince) || sup.governorate === orderProvince;
+
+                          // Check quantities and calculate supplier cost
+                          let totalCost = 0;
+                          let missingItems: string[] = [];
+                          let hasPricing = true;
+
+                          order.items.forEach((item) => {
+                            const supPrice = sup.prices?.[item.productId];
+                            const supQty = sup.quantities?.[item.productId] ?? 0;
+
+                            if (supPrice) {
+                              totalCost += supPrice * item.quantity;
+                            } else {
+                              hasPricing = false;
+                              totalCost += item.price * item.quantity; // fallback to order standard price
+                            }
+
+                            if (supQty < item.quantity) {
+                              missingItems.push(`${item.name} (${item.quantity - supQty} طن نقص)`);
+                            }
+                          });
+
+                          return (
+                            <tr key={sup.id} className="hover:bg-slate-50/50">
+                              <td className="p-3">
+                                <span className="font-extrabold text-slate-900 block text-right">{sup.name}</span>
+                                <span className="text-[10px] text-slate-400 font-bold block mt-0.5 text-right">{sup.phone}</span>
+                              </td>
+                              <td className="p-3 text-center">
+                                {coversProvince ? (
+                                  <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md font-black text-[10px] border border-emerald-150">
+                                    <Check className="h-3 w-3" />
+                                    <span>يغطي {orderProvince}</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 bg-red-50 text-red-600 px-2 py-0.5 rounded-md font-black text-[10px] border border-red-150">
+                                    <X className="h-3 w-3" />
+                                    <span>لا يغطي المحافظة</span>
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3 text-center">
+                                {missingItems.length === 0 ? (
+                                  <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md font-black text-[10px] border border-emerald-150">
+                                    <Check className="h-3 w-3" />
+                                    <span>متوفر بالكامل</span>
+                                  </span>
+                                ) : (
+                                  <div className="space-y-0.5">
+                                    <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md font-black text-[10px] border border-amber-150">
+                                      <AlertCircle className="h-3 w-3" />
+                                      <span>نقص في المخزون</span>
+                                    </span>
+                                    <span className="block text-[9px] text-red-500 font-semibold">{missingItems.join("، ")}</span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-3 text-left font-bold text-slate-900">
+                                <div className="text-left">
+                                  <span className="block">{totalCost.toLocaleString()} د.ع</span>
+                                  {hasPricing ? (
+                                    <span className="text-[9px] text-emerald-600 font-black block mt-0.5">حسب أسعار المورد المخصصة</span>
+                                  ) : (
+                                    <span className="text-[9px] text-slate-400 font-semibold block mt-0.5">تطبيق السعر الإرشادي للمنصة</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3 text-left">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (confirm(`هل أنت متأكد من تكليف وتوجيه هذا الطلب إلى (${sup.name})؟`)) {
+                                      try {
+                                        await onUpdateOrderStatus(
+                                          order.id,
+                                          "assigned",
+                                          sup.id,
+                                          `تم تعيين وتوجيه الشحنة للمورد المعتمد: ${sup.name}`
+                                        );
+                                        setRoutingOrderId(null);
+                                        alert("تم توجيه الطلب بنجاح وتحديث حالة الشحنة!");
+                                      } catch (err: any) {
+                                        alert("فشل التحويل: " + err.message);
+                                      }
+                                    }
+                                  }}
+                                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                                    coversProvince && missingItems.length === 0
+                                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      : "bg-slate-100 hover:bg-orange-500 hover:text-slate-950 text-slate-700"
+                                  }`}
+                                >
+                                  توجيه الطلب
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-end pt-4 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRoutingOrderId(null);
+                        setSelectedSupplierId("");
+                      }}
+                      className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      إغلاق المقارنة
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL 3: Professional Supplier Sheet Detail & Pricing Manager */}
+      {selectedEditSupplier && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 w-full max-w-4xl p-6 text-right relative shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => setSelectedEditSupplier(null)}
+              className="absolute left-4 top-4 text-slate-400 hover:text-slate-600 cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-2 border-b border-slate-100 pb-3">
+              <Shield className="h-5 w-5 text-orange-500" />
+              <div>
+                <h3 className="text-base font-black text-slate-950 font-sans">
+                  الملف التعريفي والأسعار الاحترافية للمورد
+                </h3>
+                <p className="text-slate-400 text-[10px] font-bold">
+                  تحديث حقول المورد وأسعاره المخصصة لحديد التسليح، وBRC، والساندويش بنل، والمحافظات المغطاة.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveSupplierSheet} className="space-y-6">
+              {/* Core attributes block */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">اسم المورد / الشركة *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editSupName}
+                    onChange={(e) => setEditSupName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">اسم المسؤول</label>
+                  <input
+                    type="text"
+                    value={editSupManagerName}
+                    onChange={(e) => setEditSupManagerName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">رقم الهاتف للدخول *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={editSupPhone}
+                    onChange={(e) => setEditSupPhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-left"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">الرمز السري (PIN) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editSupPin}
+                    onChange={(e) => setEditSupPin(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-left"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">البريد الإلكتروني (إن وجد)</label>
+                  <input
+                    type="email"
+                    placeholder="example@mail.com"
+                    value={editSupEmail}
+                    onChange={(e) => setEditSupEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 text-left"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">حالة حساب المورد</label>
+                  <select
+                    value={editSupStatus}
+                    onChange={(e) => setEditSupStatus(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="pending">قيد الانتظار والمراجعة</option>
+                    <option value="active">نشط ومفعل بالكامل</option>
+                    <option value="suspended">موقوف مؤقتاً</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-3">
+                  <label className="block text-[11px] font-bold text-slate-400 mb-1">ملاحظات داخلية (خاصة بالإدارة فقط)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="اكتب أي تفاصيل داخلية مثل الجودة والالتزام والتقييم هنا..."
+                    value={editSupInternalNotes}
+                    onChange={(e) => setEditSupInternalNotes(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+              </div>
+
+              {/* Governorates Coverage Map Select */}
+              <div className="border-t border-slate-100 pt-4">
+                <h4 className="font-black text-xs text-slate-900 mb-2 flex items-center gap-1.5">
+                  <Truck className="h-4 w-4 text-orange-500" />
+                  <span>المحافظات العراقية المشمولة بالتجهيز:</span>
+                </h4>
+                <p className="text-[10px] text-slate-400 mb-3 font-semibold leading-relaxed">
+                  حدد جميع المحافظات التي يستطيع هذا المورد التجهيز والشحن إليها. ستُستخدم هذه التغطية في الفلترة الذكية للطلبات الواردة.
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-slate-50/50 p-4 rounded-2xl border border-slate-200/60">
+                  {IRAQI_GOVERNORATES.map((gov) => {
+                    const isChecked = editSupGovernorates.includes(gov);
+                    return (
+                      <label key={gov} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold cursor-pointer transition-all ${isChecked ? "bg-orange-500/10 border-orange-500/35 text-orange-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEditSupGovernorates([...editSupGovernorates, gov]);
+                            } else {
+                              setEditSupGovernorates(editSupGovernorates.filter(g => g !== gov));
+                            }
+                          }}
+                          className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 h-3.5 w-3.5 accent-orange-600"
+                        />
+                        <span>{gov}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Supplier Pricing & Inventory Matrix */}
+              <div className="border-t border-slate-100 pt-4">
+                <h4 className="font-black text-xs text-slate-900 mb-2 flex items-center gap-1.5">
+                  <Database className="h-4 w-4 text-orange-500" />
+                  <span>مصفوفة أسعار المنتجات والمخزون المتوفر لدى المورد:</span>
+                </h4>
+                <p className="text-[10px] text-slate-400 mb-4 font-semibold leading-relaxed">
+                  أدخل أسعار التجهيز الخاصة بالمورد والكميات المتاحة لديه لكل منتج (شيش حديد التسليح بمختلف الأقطار، وأسعار BRC، وأسعار الساندويش بنل).
+                </p>
+
+                {products.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-6">لا يوجد أي منتجات مسجلة بكتالوج المنصة حالياً.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                    <table className="w-full text-right text-xs">
+                      <thead className="bg-slate-50">
+                        <tr className="border-b border-slate-200">
+                          <th className="p-3 font-black text-slate-600">اسم المنتج / القطر / المنشأ</th>
+                          <th className="p-3 font-black text-slate-600 text-center">السعر الإرشادي للمنصة</th>
+                          <th className="p-3 font-black text-slate-600">سعر المورد للطن (د.ع) *</th>
+                          <th className="p-3 font-black text-slate-600">الكمية المتوفرة بالطن *</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {products.map((prod) => {
+                          const currentPrice = editSupPrices[prod.id] || "";
+                          const currentQty = editSupQuantities[prod.id] !== undefined ? editSupQuantities[prod.id] : "";
+
+                          return (
+                            <tr key={prod.id} className="hover:bg-slate-50/20">
+                              <td className="p-3 font-extrabold text-slate-800">
+                                <div>{prod.name}</div>
+                                <div className="text-[10px] text-slate-400 font-bold mt-0.5">{prod.diameter}</div>
+                              </td>
+                              <td className="p-3 text-center font-bold text-slate-500">
+                                {prod.price.toLocaleString()} د.ع
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-1.5 max-w-[180px]">
+                                  <input
+                                    type="number"
+                                    placeholder="مثال: 920000"
+                                    value={currentPrice}
+                                    onChange={(e) => {
+                                      const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                      setEditSupPrices({ ...editSupPrices, [prod.id]: val });
+                                    }}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-left focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                  />
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-1.5 max-w-[150px]">
+                                  <input
+                                    type="number"
+                                    placeholder="مثال: 120"
+                                    value={currentQty}
+                                    onChange={(e) => {
+                                      const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                      setEditSupQuantities({ ...editSupQuantities, [prod.id]: val });
+                                    }}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-left focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Action buttons footer */}
+              <div className="flex gap-2 pt-4 border-t border-slate-100 justify-end">
+                <button
+                  type="submit"
+                  disabled={isSavingSupplier}
+                  className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-slate-950 font-black px-6 py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                >
+                  {isSavingSupplier ? (
+                    <>
+                      <span className="animate-spin inline-block h-3 w-3 border-2 border-slate-950 border-t-transparent rounded-full"></span>
+                      <span>جاري الحفظ والتدقيق...</span>
+                    </>
+                  ) : (
+                    <span>حفظ التعديلات والأسعار</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEditSupplier(null)}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  إلغاء التعديل
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

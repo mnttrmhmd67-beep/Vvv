@@ -879,6 +879,38 @@ seedIfNeeded().then(() => {
     }
   });
 
+  // Update supplier details (Admin Panel)
+  app.put("/api/suppliers/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, phone, pin, email, governorates, prices, quantities, status, internalNotes, managerName, address } = req.body;
+      const existing = await getDocById("suppliers", id);
+      if (!existing) {
+        return res.status(404).json({ error: "المورد غير موجود" });
+      }
+
+      const updated = {
+        ...existing,
+        name: name !== undefined ? name : existing.name,
+        phone: phone !== undefined ? phone : existing.phone,
+        pin: pin !== undefined ? pin : existing.pin,
+        email: email !== undefined ? email : existing.email,
+        governorates: governorates !== undefined ? governorates : existing.governorates,
+        prices: prices !== undefined ? prices : existing.prices,
+        quantities: quantities !== undefined ? quantities : existing.quantities,
+        status: status !== undefined ? status : existing.status,
+        internalNotes: internalNotes !== undefined ? internalNotes : existing.internalNotes,
+        managerName: managerName !== undefined ? managerName : existing.managerName,
+        address: address !== undefined ? address : existing.address
+      };
+
+      await setDocument("suppliers", id, updated);
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // Static Assets in Production
   // ---------------------------------------------------------------------------
